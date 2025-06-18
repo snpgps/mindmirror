@@ -17,8 +17,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/hooks/useAuth";
 import type { UserRole } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Eye, EyeOff, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 
@@ -49,10 +49,10 @@ const signupSchema = formSchemaBase.extend({
         message: "Doctor code is required.",
         path: ["doctorCode"],
       });
-    } else if (data.doctorCode.trim().length < 3) {
+    } else if (data.doctorCode.trim().length < 6) { // Keep this length or adjust as needed
        ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Doctor code must be at least 3 characters.",
+        message: "Doctor code must be at least 6 characters.",
         path: ["doctorCode"],
       });
     }
@@ -61,6 +61,12 @@ const signupSchema = formSchemaBase.extend({
 
 type AuthFormProps = {
   mode: "login" | "signup";
+};
+
+const generateDoctorCode = () => {
+  const prefix = "DR";
+  const randomChars = Math.random().toString(36).substring(2, 8).toUpperCase(); // 6 random alphanumeric chars
+  return `${prefix}${randomChars}`;
 };
 
 export function AuthForm({ mode }: AuthFormProps) {
@@ -81,6 +87,25 @@ export function AuthForm({ mode }: AuthFormProps) {
     },
   });
 
+  const watchedRole = form.watch("role");
+
+  useEffect(() => {
+    if (mode === "signup" && watchedRole === "doctor") {
+      if (!form.getValues("doctorCode")) { // Only set if not already set (e.g., by user interaction)
+        form.setValue("doctorCode" as any, generateDoctorCode());
+      }
+    } else if (mode === "signup" && watchedRole !== "doctor") {
+      form.setValue("doctorCode" as any, ""); // Clear if role is not doctor
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedRole, mode, form.setValue, form.getValues]);
+
+  const handleRegenerateCode = () => {
+    if (mode === "signup" && watchedRole === "doctor") {
+      form.setValue("doctorCode" as any, generateDoctorCode());
+    }
+  };
+
   async function onSubmit(values: CurrentFormValues) {
     setIsSubmittingForm(true);
     try {
@@ -88,6 +113,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         await signInWithEmail(values.email, values.password);
       } else if (mode === "signup") {
         const signupValues = values as z.infer<typeof signupSchema>;
+        // Ensure doctorCode is explicitly passed, even if optional in base type for Zod
         await signUpWithEmail(signupValues.email, signupValues.password, signupValues.name, signupValues.role, signupValues.doctorCode);
       }
     } catch (error: any) {
@@ -193,10 +219,6 @@ export function AuthForm({ mode }: AuthFormProps) {
                         <RadioGroup
                           onValueChange={(value) => {
                             field.onChange(value);
-                            // Optionally clear doctorCode if role changes away from doctor
-                            if (value !== 'doctor') {
-                              form.setValue('doctorCode' as any, ''); 
-                            }
                           }}
                           defaultValue={field.value}
                           className="flex flex-col space-y-1"
@@ -223,16 +245,22 @@ export function AuthForm({ mode }: AuthFormProps) {
                     </FormItem>
                   )}
                 />
-                {form.watch("role") === "doctor" && (
+                {watchedRole === "doctor" && (
                    <FormField
                     control={form.control}
                     name="doctorCode"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Your Unique Doctor Code</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Create a shareable code (e.g., DRSMITH123)" {...field} />
-                        </FormControl>
+                        <div className="flex items-center gap-2">
+                          <FormControl>
+                            <Input placeholder="e.g., DRJ0DOE7" {...field} />
+                          </FormControl>
+                          <Button type="button" variant="outline" size="icon" onClick={handleRegenerateCode} aria-label="Regenerate doctor code">
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        </div>
+                         <p className="text-xs text-muted-foreground mt-1">This code will be pre-filled. You can edit it or regenerate it.</p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -258,4 +286,3 @@ export function AuthForm({ mode }: AuthFormProps) {
     </Card>
   );
 }
-
