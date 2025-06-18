@@ -9,10 +9,13 @@ export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-primary/5 via-background to-accent/5">
       <Navbar />
-      <main className="flex-1">
+      <main className="flex-1 flex flex-col"> {/* Ensure main is a flex column that grows */}
         {/* Hero Section */}
-        <section className="w-full py-20 md:py-28 lg:py-36">
-          <div className="container px-4 md:px-6">
+        {/* This section will now expand (flex-1) and center its content vertically and horizontally */}
+        <section className="w-full flex flex-1 items-center justify-center py-12 px-4 md:px-6">
+          {/* The container class adds mx-auto for horizontal centering and max-width.
+              The parent section's items-center and justify-center will act on this container. */}
+          <div className="container">
             <div className="flex flex-col items-center justify-center space-y-6 text-center">
               <h1 className="font-headline text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
                 Understand Your Mind, Improve Your Life with <span className="text-primary">MindMirror</span>
