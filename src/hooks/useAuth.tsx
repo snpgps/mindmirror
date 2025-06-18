@@ -71,11 +71,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               ...(profileData.role === 'doctor' && { doctorCode: profileData.doctorCode }),
             };
           } else {
-            // Firestore document for users/{firebaseUser.uid} does not exist.
             const providerId = firebaseUser.providerData?.[0]?.providerId;
 
             if (providerId === 'google.com') {
-              // This is likely a first-time Google Sign-In user. Create a default profile for them.
               console.log(`Creating new patient profile for Google user: ${firebaseUser.uid}`);
               const defaultRole: UserRole = 'patient';
               const name = firebaseUser.displayName || 'New User';
@@ -91,17 +89,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               await setDoc(userDocRef, newUserFirestoreData);
               appUser = newUserFirestoreData;
             } else if (providerId === 'password') {
-              // This is an email/password user.
-              // The document should have been created by the signUpWithEmail function.
-              // If it's missing here, it's an unexpected state.
-              // DO NOT create a default 'patient' profile as that would overwrite a 'doctor' role.
               console.error(`Firestore document for email user ${firebaseUser.uid} is missing. This should have been created during signup. User will be signed out.`);
-              await signOut(auth); // Force sign out to prevent inconsistent state
+              await signOut(auth); 
               appUser = null; 
             } else {
-              // Provider is neither 'google.com' nor 'password', or providerData is missing.
               console.warn(`User ${firebaseUser.uid} authenticated with an unknown or missing provider: ${providerId}. Firestore document missing. User will be signed out.`);
-              await signOut(auth); // Force sign out
+              await signOut(auth); 
               appUser = null;
             }
           }
@@ -134,6 +127,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsProcessingAuth(true);
     try {
       await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged will handle setting user and redirecting
     } catch (error: any) {
       console.error("Google Sign-In error", error);
       throw error; 
@@ -159,6 +153,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       const userDocRef = doc(db, "users", userCredential.user.uid);
       await setDoc(userDocRef, userProfileData);
+      // onAuthStateChanged will handle setting user and redirecting
     } catch (error: any) {
       console.error("Email Sign-Up error", error);
       throw error;
@@ -171,6 +166,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsProcessingAuth(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged will handle setting user and redirecting
     } catch (error: any) {
       console.error("Email Sign-In error", error);
       throw error;
@@ -183,6 +179,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsProcessingAuth(true);
     try {
       await signOut(auth);
+      // onAuthStateChanged will set user to null and redirect if necessary
     } catch (error: any) {
       console.error("Sign Out error", error);
     } finally {
