@@ -18,9 +18,9 @@ import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
-  loading: boolean; // For initial auth state resolution & passive changes
+  loading: boolean; 
   isAuthenticated: boolean;
-  isProcessingAuth: boolean; // For active sign-in/sign-up attempts
+  isProcessingAuth: boolean; 
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string, name: string, role: UserRole, doctorCode?: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -36,8 +36,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isProcessingAuth, setIsProcessingAuth] = useState(false);
   const router = useRouter();
 
-  // Ref to hold the current value of isProcessingAuth for use in onAuthStateChanged
-  // This helps avoid stale closures without making onAuthStateChanged re-subscribe too often.
   const isProcessingAuthRef = useRef(isProcessingAuth);
   useEffect(() => {
     isProcessingAuthRef.current = isProcessingAuth;
@@ -60,9 +58,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUserType | null) => {
-      const activeProcessing = isProcessingAuthRef.current; // Use the ref's current value
+      const activeProcessing = isProcessingAuthRef.current;
 
-      if (!activeProcessing) { // Only manage general `loading` if not actively processing an auth operation
+      if (!activeProcessing) {
         setLoading(true);
       }
       
@@ -74,7 +72,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           let userProfileSnap = await getDoc(userDocRef);
           const providerId = firebaseUser.providerData?.[0]?.providerId;
 
-          // Retry logic for newly signed-up email users if doc isn't immediately found
           if (!userProfileSnap.exists() && providerId === 'password') {
             console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} not initially found. Retrying after delay...`);
             await new Promise(resolve => setTimeout(resolve, 750)); 
@@ -115,14 +112,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           }
           
           if (appUser) {
-            setUser(appUser); // Set the user in context
-            // Navigation logic - ensure not to redirect if an active process (like signup) is still indicated by isProcessingAuthRef
-            if (!activeProcessing && (window.location.pathname === '/login' || window.location.pathname === '/signup' || window.location.pathname === '/')) {
-                if (appUser.role === 'patient') router.push('/patient/dashboard');
-                else if (appUser.role === 'doctor') router.push('/doctor/dashboard');
+            setUser(appUser); 
+
+            if (!activeProcessing) {
+              const currentPath = window.location.pathname;
+              if (currentPath === '/login' || currentPath === '/signup' || currentPath === '/') {
+                if (appUser.role === 'patient') {
+                  console.log("Navigating to patient dashboard from onAuthStateChanged (deferred)");
+                  setTimeout(() => router.push('/patient/dashboard'), 0);
+                } else if (appUser.role === 'doctor') {
+                  console.log("Navigating to doctor dashboard from onAuthStateChanged (deferred)");
+                  setTimeout(() => router.push('/doctor/dashboard'), 0);
+                }
+              }
             }
-          } else {
-             setUser(null); // Ensure user state is cleared if appUser couldn't be established
+          } else { 
+             setUser(null); 
           }
 
         } catch (error) {
@@ -134,25 +139,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else { 
         setUser(null);
         appUser = null;
-         // Navigation for logged-out users on protected routes
-        if (!activeProcessing && (window.location.pathname.startsWith('/patient') || window.location.pathname.startsWith('/doctor'))) {
-            router.push('/login');
+        if (!activeProcessing) {
+          const currentPath = window.location.pathname;
+          if (currentPath.startsWith('/patient') || currentPath.startsWith('/doctor')) {
+            console.log("Navigating to login from protected route (onAuthStateChanged - deferred)");
+            setTimeout(() => router.push('/login'), 0);
+          }
         }
       }
       
-      if (!activeProcessing) { // Only set general loading to false if we started it
+      if (!activeProcessing) { 
         setLoading(false);
       }
     });
     return () => unsubscribe();
-  // `router` and `updateUserInContext` are stable. `isProcessingAuthRef` is used to get current `isProcessingAuth` value.
   }, [router, updateUserInContext]); 
 
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
     try {
       await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged will handle setting user and navigation
     } catch (error: any) {
       console.error("Google Sign-In error", error);
       throw error; 
@@ -183,12 +189,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       await setDoc(userDocRef, userProfileData); 
       console.log(`signUpWithEmail: Firestore doc set for ${newAuthUser.uid}. Setting user in context.`);
-      
       setUser(userProfileData as User); 
-      // Navigation will be handled by onAuthStateChanged based on the new user state, once isProcessingAuth is false.
 
     } catch (error: any) {
       console.error("Email Sign-Up error:", error);
+      setUser(null); 
       throw error; 
     } finally {
       setIsProcessingAuth(false);
@@ -199,7 +204,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsProcessingAuth(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle setting user and navigation
     } catch (error: any) {
       console.error("Email Sign-In error", error);
       throw error;
@@ -209,14 +213,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logoutUser = async () => {
-    // setIsProcessingAuth(true); // Optional: if logout takes time or has UI effects
     try {
       await signOut(auth);
-      // onAuthStateChanged will set user to null and handle navigation
     } catch (error: any) {
       console.error("Sign Out error", error);
-    } finally {
-      // setIsProcessingAuth(false); // Match if set to true at start
     }
   };
   
@@ -224,7 +224,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     <AuthContext.Provider value={{ 
       user, 
       loading, 
-      isAuthenticated: !!user && !loading && !isProcessingAuth, // Adjusted isAuthenticated to consider isProcessingAuth
+      isAuthenticated: !!user && !loading && !isProcessingAuth,
       isProcessingAuth,
       signInWithGoogle,
       signUpWithEmail,
