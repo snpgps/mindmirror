@@ -15,7 +15,7 @@ export default function HomePage() {
         <section className="w-full flex flex-1 items-center justify-center py-12 px-4 md:px-6">
           {/* The container class adds mx-auto for horizontal centering and max-width.
               The parent section's items-center and justify-center will act on this container. */}
-          <div className="container">
+          <div className="container mx-auto">
             <div className="flex flex-col items-center justify-center space-y-6 text-center">
               <h1 className="font-headline text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
                 Understand Your Mind, Improve Your Life with <span className="text-primary">MindMirror</span>
@@ -37,7 +37,7 @@ export default function HomePage() {
 
         {/* Features Section */}
         <section className="w-full py-16 md:py-24 bg-background/70 backdrop-blur-md">
-          <div className="container px-4 md:px-6">
+          <div className="container mx-auto px-4 md:px-6">
             <div className="flex flex-col items-center justify-center space-y-4 text-center mb-12">
               <div className="inline-block rounded-lg bg-muted px-3 py-1 text-sm font-medium text-primary">Core Benefits</div>
               <h2 className="font-headline text-3xl font-bold tracking-tight sm:text-4xl">
@@ -75,7 +75,7 @@ export default function HomePage() {
         
         {/* Call to Action Section */}
         <section className="w-full py-20 md:py-28">
-          <div className="container grid items-center justify-center gap-4 px-4 md:px-6 text-center">
+          <div className="container mx-auto grid items-center justify-center gap-4 px-4 md:px-6 text-center">
             <div className="space-y-4">
               <Lightbulb className="h-16 w-16 text-primary mx-auto" />
               <h2 className="font-headline text-3xl font-bold tracking-tight md:text-4xl">
