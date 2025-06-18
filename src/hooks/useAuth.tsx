@@ -2,7 +2,7 @@
 "use client";
 import type { User, UserRole, Patient, Doctor } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
+import React, { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { 
   getAuth, 
   onAuthStateChanged, 
@@ -16,7 +16,6 @@ import {
 import { auth, googleProvider, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 
-// Temporary state for pending profile data during signup
 interface PendingUserProfile {
   uid: string;
   name: string;
@@ -43,7 +42,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isProcessingAuth, setIsProcessingAuth] = useState(false);
-  const [pendingUserProfileData, setPendingUserProfileData] = useState<PendingUserProfile | null>(null);
+  const pendingUserProfileDataRef = useRef<PendingUserProfile | null>(null);
   const router = useRouter();
 
   const updateUserInContext = useCallback(async (updatedProfileData: Partial<User>) => {
@@ -61,7 +60,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUserType | null) => {
       setLoading(true);
-      setIsProcessingAuth(true);
+      setIsProcessingAuth(true); // Indicates active processing of auth state
       let appUser: User | null = null; 
 
       if (firebaseUser) {
@@ -69,27 +68,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
           let userProfileSnap = await getDoc(userDocRef);
 
-          if (!userProfileSnap.exists() && pendingUserProfileData && pendingUserProfileData.uid === firebaseUser.uid) {
-            // This is a new email signup, create Firestore document now
-            console.log(`onAuthStateChanged: Creating Firestore doc for new user ${firebaseUser.uid}`);
-            const { name, email, role, doctorCode } = pendingUserProfileData;
-            let firestoreData: Patient | Doctor;
-            if (role === 'doctor') {
-              firestoreData = { id: firebaseUser.uid, name, email, role, doctorCode: doctorCode! };
+          if (!userProfileSnap.exists()) {
+            const pendingData = pendingUserProfileDataRef.current;
+            if (pendingData && pendingData.uid === firebaseUser.uid) {
+              console.log(`onAuthStateChanged: Creating Firestore doc for new user ${firebaseUser.uid} using pending data.`);
+              const { name, email, role, doctorCode } = pendingData;
+              let firestoreData: Patient | Doctor;
+              if (role === 'doctor') {
+                firestoreData = { id: firebaseUser.uid, name, email, role, doctorCode: doctorCode! };
+              } else {
+                firestoreData = { id: firebaseUser.uid, name, email, role };
+              }
+              await setDoc(userDocRef, firestoreData);
+              appUser = firestoreData as User;
+              setUser(appUser); 
+              pendingUserProfileDataRef.current = null; // Clear pending data AFTER successful use
+              userProfileSnap = await getDoc(userDocRef); // Re-fetch snap (optional, appUser is set)
             } else {
-              firestoreData = { id: firebaseUser.uid, name, email, role };
+              // No existing doc AND no (or non-matching) pending data
+              const providerId = firebaseUser.providerData?.[0]?.providerId;
+              if (providerId === 'google.com') {
+                console.log(`onAuthStateChanged: Creating Firestore doc for new Google user ${firebaseUser.uid}`);
+                const defaultRole: UserRole = 'patient';
+                const name = firebaseUser.displayName || 'New User';
+                const email = firebaseUser.email || '';
+                const newUserFirestoreData: Patient = { id: firebaseUser.uid, name, email, role: defaultRole };
+                await setDoc(userDocRef, newUserFirestoreData);
+                appUser = newUserFirestoreData;
+                setUser(appUser);
+              } else if (providerId === 'password') {
+                 console.error(`CRITICAL: Firestore document for email user ${firebaseUser.uid} is missing and no (or non-matching) pending data. Signing out.`);
+                 await signOut(auth); // This will re-trigger onAuthStateChanged with firebaseUser = null
+                 // setUser(null) and pendingUserProfileDataRef.current = null will be handled by the 'else' block below
+                 // No appUser here.
+              } else {
+                console.warn(`User ${firebaseUser.uid} authenticated with unhandled provider ${providerId}. Firestore document missing. Signing out.`);
+                await signOut(auth);
+              }
             }
-            await setDoc(userDocRef, firestoreData);
-            appUser = firestoreData as User;
-            setUser(appUser);
-            setPendingUserProfileData(null); // Clear pending data
-            userProfileSnap = await getDoc(userDocRef); // Re-fetch snap after creation
           }
 
-
-          if (userProfileSnap.exists()) {
+          if (userProfileSnap.exists()) { // Check again, might have been created above
             const profileData = userProfileSnap.data() as any; 
-            appUser = {
+            // Ensure appUser is only set if not already handled by pendingData logic or if data is different
+            const potentialAppUser = {
               id: firebaseUser.uid,
               email: firebaseUser.email || profileData.email || '',
               name: firebaseUser.displayName || profileData.name || 'User',
@@ -97,38 +119,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               ...(profileData.role === 'patient' && { linkedDoctorCode: profileData.linkedDoctorCode }),
               ...(profileData.role === 'doctor' && { doctorCode: profileData.doctorCode }),
             };
-            // If setUser was already called above for new signup, this might be redundant but ensures consistency
-            if (!user || user.id !== appUser.id || user.role !== appUser.role) {
-                 setUser(appUser);
-            }
-          } else {
-            // Document still doesn't exist, handle Google new user or error cases
-            const providerId = firebaseUser.providerData?.[0]?.providerId;
-
-            if (providerId === 'google.com') {
-              // First-time Google sign-in, create patient profile
-              console.log(`onAuthStateChanged: Creating Firestore doc for new Google user ${firebaseUser.uid}`);
-              const defaultRole: UserRole = 'patient';
-              const name = firebaseUser.displayName || 'New User';
-              const email = firebaseUser.email || '';
-              const newUserFirestoreData: Patient = { id: firebaseUser.uid, name, email, role: defaultRole };
-              await setDoc(userDocRef, newUserFirestoreData);
-              appUser = newUserFirestoreData;
-              setUser(appUser);
-            } else if (providerId === 'password' && !pendingUserProfileData) {
-              // Firestore doc missing for email user, and no pending data - this is an anomaly
-              console.error(`CRITICAL: Firestore document for email user ${firebaseUser.uid} is missing and no pending data. Signing out.`);
-              await signOut(auth);
-              appUser = null;
-              setUser(null);
-            } else if (providerId !== 'password' && providerId !== 'google.com') {
-              console.warn(`User ${firebaseUser.uid} authenticated with provider ${providerId}. Firestore document missing. Signing out.`);
-              await signOut(auth);
-              appUser = null;
-              setUser(null);
+            if (!appUser || JSON.stringify(appUser) !== JSON.stringify(potentialAppUser)) {
+                appUser = potentialAppUser;
+                setUser(appUser);
             }
           }
           
+          // Redirection logic
           if (appUser && (window.location.pathname === '/login' || window.location.pathname === '/signup' || window.location.pathname === '/')) {
               if (appUser.role === 'patient') router.push('/patient/dashboard');
               else if (appUser.role === 'doctor') router.push('/doctor/dashboard');
@@ -136,92 +133,88 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         } catch (error) {
             console.error("Error in onAuthStateChanged processing user profile:", error);
-            await signOut(auth);
-            setUser(null);
-            setPendingUserProfileData(null); // Clear pending data on error
+            await signOut(auth); // Sign out on error to prevent inconsistent state
+            // setUser(null) and pendingUserProfileDataRef.current = null handled by subsequent onAuthStateChanged
             appUser = null;
         }
       } else { // No firebaseUser (logged out)
         setUser(null);
         appUser = null;
-        setPendingUserProfileData(null); // Clear pending data on logout
+        pendingUserProfileDataRef.current = null; // Clear pending data on logout
         if (window.location.pathname.startsWith('/patient') || window.location.pathname.startsWith('/doctor')) {
             router.push('/login');
         }
       }
       setLoading(false);
-      setIsProcessingAuth(false);
+      setIsProcessingAuth(false); // Finished processing this auth state change
     });
     return () => unsubscribe();
-  }, [router, updateUserInContext, pendingUserProfileData]); 
+  // Minimal dependencies: router is stable, updateUserInContext is memoized but its change doesn't affect the core listener logic for new signups.
+  }, [router, updateUserInContext]); 
 
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
-    setPendingUserProfileData(null); // Clear any pending data
+    pendingUserProfileDataRef.current = null; 
     try {
       await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged will handle Firestore document creation/update
     } catch (error: any) {
       console.error("Google Sign-In error", error);
-      setUser(null);
+      // setUser(null) will be handled by onAuthStateChanged if auth fails/reverts
       throw error; 
     } finally {
-      setIsProcessingAuth(false);
+      // setIsProcessingAuth(false) will be handled by onAuthStateChanged
     }
   };
 
   const signUpWithEmail = async (email: string, password: string, name: string, role: UserRole, doctorCode?: string) => {
     setIsProcessingAuth(true);
-    setPendingUserProfileData(null); // Clear previous pending data
+    pendingUserProfileDataRef.current = null;
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newAuthUser = userCredential.user;
       await updateFirebaseAuthProfile(newAuthUser, { displayName: name });
       
-      // Set pending data for onAuthStateChanged to pick up
-      setPendingUserProfileData({
+      pendingUserProfileDataRef.current = {
         uid: newAuthUser.uid,
-        name: name, // Use name from form
-        email: newAuthUser.email!, // Use email from auth object
+        name: name, 
+        email: newAuthUser.email!,
         role: role,
         doctorCode: role === 'doctor' ? doctorCode : undefined,
-      });
-      // Note: We DO NOT call setUser or setDoc here directly.
+      };
       // onAuthStateChanged will handle Firestore document creation and setting the user state.
-
     } catch (error: any) {
-      console.error("Email Sign-Up error in signUpWithEmail (Auth step):", error);
-      // No user object to set to null here, as onAuthStateChanged handles user state
-      throw error; // Re-throw to be caught by AuthForm
+      console.error("Email Sign-Up error (Auth step):", error);
+      pendingUserProfileDataRef.current = null; // Clear on error
+      throw error; 
     } finally {
-      setIsProcessingAuth(false); // This processing is for the auth step only
+      // setIsProcessingAuth(false) will be handled by onAuthStateChanged after this auth event is processed
     }
   };
 
   const signInWithEmail = async (email: string, password: string) => {
     setIsProcessingAuth(true);
-    setPendingUserProfileData(null); // Clear any pending data
+    pendingUserProfileDataRef.current = null;
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle loading the user profile
     } catch (error: any) {
       console.error("Email Sign-In error", error);
-      setUser(null); // Explicitly nullify on error before onAuthStateChanged runs
       throw error;
     } finally {
-      setIsProcessingAuth(false);
+      // setIsProcessingAuth(false) will be handled by onAuthStateChanged
     }
   };
 
   const logoutUser = async () => {
-    setIsProcessingAuth(true);
+    setIsProcessingAuth(true); // Indicate start of logout process
     try {
       await signOut(auth);
-      // onAuthStateChanged will set user to null
+      // onAuthStateChanged will set user to null and clear pending data
     } catch (error: any) {
       console.error("Sign Out error", error);
+      // Even on error, onAuthStateChanged should reflect the (possibly unchanged) auth state.
+      // If user remains, then processing will conclude normally. If logout succeeded despite error, it's also handled.
     } finally {
-      setIsProcessingAuth(false);
+       // setIsProcessingAuth(false) will be handled by the onAuthStateChanged triggered by signOut
     }
   };
   
