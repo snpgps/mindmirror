@@ -43,14 +43,11 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
     if (dateRange?.from) {
       const entryDate = parseISO(entry.timestamp);
       const from = startOfDay(dateRange.from);
-      // If only 'from' is selected, match entries on or after 'from'
-      // If 'to' is also selected, match entries within the interval
-      const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date()); // Default 'to' to today if not set for range
+      const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date()); 
       
       if (dateRange.to) {
         dateMatch = isWithinInterval(entryDate, { start: from, end: to });
       } else {
-        // If only from date is picked, filter from that date onwards
          dateMatch = entryDate >= from;
       }
     }
@@ -71,22 +68,47 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
   ].filter(Boolean).length;
 
   const getCoreEmotionStyle = (moodWords: string[]): { name: string, badgeClassName: string, dotClassName: string } => {
-    if (!moodWords || moodWords.length === 0) return { name: "Mood", badgeClassName: "bg-muted text-muted-foreground border-border", dotClassName: "bg-muted-foreground" };
+    if (!moodWords || moodWords.length === 0) {
+      return { name: "Mood", badgeClassName: "bg-muted text-muted-foreground border-border", dotClassName: "bg-muted-foreground" };
+    }
     const firstWord = moodWords[0];
     for (const coreKey in EMOTION_HIERARCHY) {
       if (EMOTION_HIERARCHY[coreKey].name === firstWord) {
-        const baseColorClass = EMOTION_HIERARCHY[coreKey].colorClass.split(' ')[0]; 
-        const textColorClass = EMOTION_HIERARCHY[coreKey].colorClass.includes('text-white') ? 'text-white' : `text-${baseColorClass.split('-')[1]}-700`;
-        const borderColorClass = `border-${baseColorClass.split('-')[1]}-300`;
+        const coreEmotionDetails = EMOTION_HIERARCHY[coreKey];
+        const colorClassParts = coreEmotionDetails.colorClass.split(' ');
+        const baseBgClass = colorClassParts.find(cls => cls.startsWith('bg-')) || 'bg-gray-500';
+        const explicitTextColorClass = colorClassParts.find(cls => cls.startsWith('text-')) || 'text-white';
+        const baseColorName = baseBgClass.split('-')[1]; 
+
+        const dotClassName = baseBgClass;
+
+        // Light mode badge styles
+        const badgeBgClass = `bg-${baseColorName}-100`;
+        const badgeTextColorClass = explicitTextColorClass === 'text-white' ? `text-${baseColorName}-700` : explicitTextColorClass;
+        const badgeBorderColorClass = `border-${baseColorName}-200`;
+
+        // Dark mode badge styles
+        const darkBadgeBgClass = `dark:bg-${baseColorName}-800/60`; // Adjusted opacity slightly
+        let darkBadgeTextColorClass: string;
+        if (explicitTextColorClass === 'text-white') {
+          darkBadgeTextColorClass = `dark:text-${baseColorName}-200`;
+        } else {
+          // For dark text on light bg (e.g. text-gray-800), use a light color in dark mode
+           darkBadgeTextColorClass = `dark:text-${baseColorName}-200`; // Fallback, or use a generic light color
+           if (explicitTextColorClass.includes('gray-800') || explicitTextColorClass.includes('black') || explicitTextColorClass.includes('slate-800')) {
+               darkBadgeTextColorClass = 'dark:text-gray-200';
+           }
+        }
+        const darkBadgeBorderColorClass = `dark:border-${baseColorName}-700`;
         
         return {
-          name: EMOTION_HIERARCHY[coreKey].name,
-          badgeClassName: `${baseColorClass.replace('-500', '-100')} ${textColorClass.replace('-700', '-800')} ${borderColorClass.replace('-300','-200')} dark:${baseColorClass.replace('-500', '-800/70')} dark:${textColorClass.replace('-700', '-200')} dark:${borderColorClass.replace('-300','-700')}`,
-          dotClassName: `${baseColorClass}` 
+          name: coreEmotionDetails.name,
+          badgeClassName: `${badgeBgClass} ${badgeTextColorClass} ${badgeBorderColorClass} ${darkBadgeBgClass} ${darkBadgeTextColorClass} ${darkBadgeBorderColorClass}`,
+          dotClassName: dotClassName
         };
       }
     }
-    return { name: firstWord, badgeClassName: "bg-muted text-muted-foreground border-border", dotClassName: "bg-muted-foreground" };
+    return { name: firstWord || "Mood", badgeClassName: "bg-muted text-muted-foreground border-border", dotClassName: "bg-muted-foreground" };
   };
 
 
@@ -203,22 +225,26 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
         {filteredEntries.length > 0 ? (
           <ScrollArea className="h-[500px] pr-3">
             <div className="relative pl-4">
+              {/* The main timeline vertical bar */}
               <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-border -z-10"></div>
               
               {filteredEntries.map((entry, index) => {
                 const coreEmotionStyle = getCoreEmotionStyle(entry.moodWords);
                 return (
                   <div key={entry.id} className="relative pl-10 pb-8 last:pb-0">
+                    {/* Dot on the timeline */}
                     <div className={cn(
-                      "absolute left-[18px] top-[5px] h-5 w-5 rounded-full border-4 border-background",
+                      "absolute left-[18px] top-[5px] h-5 w-5 rounded-full border-4 border-background", // Adjusted left to align center of the line (24px - 2.5px for half width of dot)
                       coreEmotionStyle.dotClassName
                     )}></div>
 
-                    {index < filteredEntries.length -1 && (
+                    {/* Connector line for all but the last item - ensuring it stops before the dot of the next item if items are close */}
+                    {/* This is handled by the main timeline bar now, below conditional line is not strictly needed if main bar is present */}
+                    {/* {index < filteredEntries.length -1 && (
                        <div className="absolute left-6 top-[25px] bottom-0 w-0.5 bg-border"></div>
-                    )}
+                    )} */}
                     
-                    <div className="pt-0.5"> 
+                    <div className="pt-0.5"> {/* Minor adjustment for card alignment relative to dot */}
                        <p className="text-xs text-muted-foreground flex items-center mb-2">
                           <CalendarDays className="mr-1.5 h-3 w-3" />
                           {format(parseISO(entry.timestamp), "PPpp")}
@@ -271,4 +297,3 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
     </Card>
   );
 }
-
