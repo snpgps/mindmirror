@@ -10,10 +10,11 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  updateProfile,
+  updateProfile as updateFirebaseAuthProfile, // Renamed to avoid conflict
   type User as FirebaseUserType
 } from 'firebase/auth';
-import { auth, googleProvider } from '@/lib/firebase'; // Assuming firebase.ts is in src/lib
+import { auth, googleProvider, db } from '@/lib/firebase';
+import { doc, setDoc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -24,103 +25,103 @@ interface AuthContextType {
   signUpWithEmail: (email: string, password: string, name: string, role: UserRole, doctorCode?: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateUserInContext: (updatedProfileData: Partial<User>) => void;
+  updateUserInContext: (updatedProfileData: Partial<User>) => Promise<void>; // Now async
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true); // For initial auth state check
-  const [isProcessingAuth, setIsProcessingAuth] = useState(false); // For ongoing auth operations
+  const [loading, setLoading] = useState(true);
+  const [isProcessingAuth, setIsProcessingAuth] = useState(false);
   const router = useRouter();
 
-  const updateUserInContext = useCallback((updatedProfileData: Partial<User>) => {
+  const updateUserInContext = useCallback(async (updatedProfileData: Partial<User>) => {
+    if (!user) return;
+    const userDocRef = doc(db, "users", user.id);
+    await updateDoc(userDocRef, updatedProfileData);
+    
     setUser(currentUser => {
       if (!currentUser) return null;
       const newUserData = { ...currentUser, ...updatedProfileData };
-      // Update localStorage profile as well
-      localStorage.setItem(`mindmirror-profile-${newUserData.id}`, JSON.stringify({
-        name: newUserData.name,
-        role: newUserData.role,
-        ...(newUserData.role === 'patient' && { linkedDoctorCode: (newUserData as Patient).linkedDoctorCode }),
-        ...(newUserData.role === 'doctor' && { doctorCode: (newUserData as Doctor).doctorCode }),
-      }));
+      // localStorage.setItem(`mindmirror-profile-${newUserData.id}`, JSON.stringify(newUserData)); // Optionally update localStorage cache
       return newUserData;
     });
-  }, []);
+  }, [user]);
 
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUserType | null) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUserType | null) => {
       setLoading(true);
+      setIsProcessingAuth(true);
       if (firebaseUser) {
-        let userProfile: any = null;
-        try {
-          const storedProfile = localStorage.getItem(`mindmirror-profile-${firebaseUser.uid}`);
-          if (storedProfile) {
-            userProfile = JSON.parse(storedProfile);
-          }
-        } catch (e) { console.error("Failed to parse profile from localStorage", e); }
+        const userDocRef = doc(db, "users", firebaseUser.uid);
+        let appUser: User | null = null;
 
-        if (userProfile) {
-          const appUser: User = {
-            id: firebaseUser.uid,
-            email: firebaseUser.email || userProfile.email || '',
-            name: firebaseUser.displayName || userProfile.name || 'User',
-            role: userProfile.role,
-            ...(userProfile.role === 'patient' && { linkedDoctorCode: userProfile.linkedDoctorCode }),
-            ...(userProfile.role === 'doctor' && { doctorCode: userProfile.doctorCode }),
-          };
+        try {
+          const userProfileSnap = await getDoc(userDocRef);
+
+          if (userProfileSnap.exists()) {
+            const profileData = userProfileSnap.data() as any;
+            appUser = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email || profileData.email || '',
+              name: firebaseUser.displayName || profileData.name || 'User',
+              role: profileData.role as UserRole,
+              ...(profileData.role === 'patient' && { linkedDoctorCode: profileData.linkedDoctorCode }),
+              ...(profileData.role === 'doctor' && { doctorCode: profileData.doctorCode }),
+            };
+          } else {
+            // New user (e.g. first Google Sign-In) or Firestore doc missing. Create it.
+            const defaultRole: UserRole = 'patient';
+            const name = firebaseUser.displayName || 'New User';
+            const email = firebaseUser.email || '';
+            
+            const newUserFirestoreData: User = { 
+              id: firebaseUser.uid, 
+              name, 
+              email, 
+              role: defaultRole 
+            };
+            
+            await setDoc(userDocRef, newUserFirestoreData);
+            appUser = newUserFirestoreData;
+          }
           setUser(appUser);
-        } else {
-          // New user via Google Sign-In or profile missing, create a default 'patient' profile
-          const defaultRole: UserRole = 'patient';
-          const newUserProfile = {
-            name: firebaseUser.displayName || 'New User',
-            email: firebaseUser.email || '',
-            role: defaultRole,
-          };
-          localStorage.setItem(`mindmirror-profile-${firebaseUser.uid}`, JSON.stringify(newUserProfile));
-          setUser({
-            id: firebaseUser.uid,
-            email: newUserProfile.email,
-            name: newUserProfile.name,
-            role: defaultRole,
-          });
-        }
-        // Determine redirect based on role AFTER user is set
-        const finalUserRole = userProfile?.role || 'patient';
-         if (window.location.pathname === '/login' || window.location.pathname === '/signup' || window.location.pathname === '/') {
-            if (finalUserRole === 'patient') {
-                router.push('/patient/dashboard');
-            } else {
-                router.push('/doctor/dashboard');
-            }
+
+          if (appUser && (window.location.pathname === '/login' || window.location.pathname === '/signup' || window.location.pathname === '/')) {
+              if (appUser.role === 'patient') router.push('/patient/dashboard');
+              else if (appUser.role === 'doctor') router.push('/doctor/dashboard');
+          }
+        } catch (error) {
+            console.error("Error fetching/creating user profile in Firestore:", error);
+            // Potentially sign out the user if profile can't be established
+            await signOut(auth);
+            setUser(null);
+            router.push('/login');
         }
 
       } else {
         setUser(null);
-        // When logging out, if on a protected route, redirect to login
         if (window.location.pathname.startsWith('/patient') || window.location.pathname.startsWith('/doctor')) {
             router.push('/login');
         }
       }
       setLoading(false);
+      setIsProcessingAuth(false);
     });
     return () => unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]); // router dependency for redirect logic
+  }, [router]);
 
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
     try {
       await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged will handle setting user and redirecting
+      // onAuthStateChanged will handle fetching/creating Firestore doc, setting user, and redirecting
     } catch (error: any) {
       console.error("Google Sign-In error", error);
-      // Handle error (e.g., show toast to user)
-      // Example: toast({ variant: "destructive", title: "Google Sign-In Failed", description: error.message });
+      throw error; 
     } finally {
       setIsProcessingAuth(false);
     }
@@ -130,20 +131,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsProcessingAuth(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(userCredential.user, { displayName: name });
+      await updateFirebaseAuthProfile(userCredential.user, { displayName: name });
       
-      const userProfileData: any = { name, email, role };
-      if (role === 'doctor' && doctorCode) {
-        userProfileData.doctorCode = doctorCode;
-      }
-      localStorage.setItem(`mindmirror-profile-${userCredential.user.uid}`, JSON.stringify(userProfileData));
-      // onAuthStateChanged will handle setting user and redirecting.
-      // We need to ensure the profile is available for onAuthStateChanged.
-      // Triggering a re-evaluation or explicitly setting user here might be needed if onAuthStateChanged doesn't pick up immediately.
-      // For now, relying on onAuthStateChanged.
+      const userProfileData: User | Doctor | Patient = {
+        id: userCredential.user.uid,
+        name,
+        email,
+        role,
+        ...(role === 'doctor' && doctorCode && { doctorCode }),
+        ...(role === 'patient' && { linkedDoctorCode: undefined }), // Explicitly patient
+      };
+      
+      const userDocRef = doc(db, "users", userCredential.user.uid);
+      await setDoc(userDocRef, userProfileData);
+      // onAuthStateChanged will set the user state and handle redirect.
     } catch (error: any) {
       console.error("Email Sign-Up error", error);
-      throw error; // Re-throw to be caught in AuthForm
+      throw error;
     } finally {
       setIsProcessingAuth(false);
     }
@@ -156,7 +160,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // onAuthStateChanged will handle setting user and redirecting
     } catch (error: any) {
       console.error("Email Sign-In error", error);
-      throw error; // Re-throw to be caught in AuthForm
+      throw error;
     } finally {
       setIsProcessingAuth(false);
     }
@@ -198,3 +202,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
