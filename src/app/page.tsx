@@ -72,7 +72,7 @@ export default function HomePage() {
         
         {/* Call to Action Section */}
         <section className="w-full py-20 md:py-28">
-          <div className="container grid items-center justify-center gap-4 px-4 text-center md:px-6">
+          <div className="container grid items-center justify-center gap-4 px-4 md:px-6 text-center">
             <div className="space-y-4">
               <Lightbulb className="h-16 w-16 text-primary mx-auto" />
               <h2 className="font-headline text-3xl font-bold tracking-tight md:text-4xl">
