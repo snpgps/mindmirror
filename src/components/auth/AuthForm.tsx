@@ -41,6 +41,22 @@ const signupSchema = formSchemaBase.extend({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   role: z.enum(["patient", "doctor"], { required_error: "You must select a role." }),
   doctorCode: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.role === "doctor") {
+    if (!data.doctorCode || data.doctorCode.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Doctor code is required.",
+        path: ["doctorCode"],
+      });
+    } else if (data.doctorCode.trim().length < 3) {
+       ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Doctor code must be at least 3 characters.",
+        path: ["doctorCode"],
+      });
+    }
+  }
 });
 
 type AuthFormProps = {
@@ -70,11 +86,9 @@ export function AuthForm({ mode }: AuthFormProps) {
     try {
       if (mode === "login") {
         await signInWithEmail(values.email, values.password);
-        // Navigation is handled by useAuth's onAuthStateChanged
       } else if (mode === "signup") {
         const signupValues = values as z.infer<typeof signupSchema>;
         await signUpWithEmail(signupValues.email, signupValues.password, signupValues.name, signupValues.role, signupValues.doctorCode);
-        // Navigation is handled by useAuth's onAuthStateChanged
       }
     } catch (error: any) {
       toast({
@@ -90,7 +104,6 @@ export function AuthForm({ mode }: AuthFormProps) {
   const handleGoogleSignIn = async () => {
     try {
       await signInWithGoogle();
-      // Navigation is handled by useAuth's onAuthStateChanged
     } catch (error: any) {
        toast({
         variant: "destructive",
@@ -178,7 +191,13 @@ export function AuthForm({ mode }: AuthFormProps) {
                       <FormLabel>I am a...</FormLabel>
                       <FormControl>
                         <RadioGroup
-                          onValueChange={field.onChange}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            // Optionally clear doctorCode if role changes away from doctor
+                            if (value !== 'doctor') {
+                              form.setValue('doctorCode' as any, ''); 
+                            }
+                          }}
                           defaultValue={field.value}
                           className="flex flex-col space-y-1"
                         >
@@ -239,3 +258,4 @@ export function AuthForm({ mode }: AuthFormProps) {
     </Card>
   );
 }
+
