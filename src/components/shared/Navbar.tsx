@@ -1,7 +1,7 @@
 
 "use client";
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation'; // Added usePathname
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -19,6 +19,7 @@ import { LayoutDashboard, UserCircle, LogOut, UserPlus, LogInIcon, Link2 } from 
 const Navbar = () => {
   const { user, logout, isAuthenticated, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname(); // Get current pathname
 
   const getInitials = (name?: string) => {
     if (!name) return 'U';
@@ -81,10 +82,16 @@ const Navbar = () => {
             </>
           ) : (
             <>
-              <Button variant="ghost" onClick={() => router.push('/login')}>
+              <Button 
+                variant={pathname === '/login' ? 'default' : 'ghost'} 
+                onClick={() => router.push('/login')}
+              >
                 <LogInIcon className="mr-2 h-4 w-4" /> Login
               </Button>
-              <Button onClick={() => router.push('/signup')}>
+              <Button 
+                variant={pathname === '/signup' ? 'default' : 'ghost'} 
+                onClick={() => router.push('/signup')}
+              >
                 <UserPlus className="mr-2 h-4 w-4" /> Sign Up
               </Button>
             </>
