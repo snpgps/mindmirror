@@ -82,24 +82,24 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
 
         const dotClassName = baseBgClass;
 
-        // Light mode badge styles
-        const badgeBgClass = `bg-${baseColorName}-100`;
-        const badgeTextColorClass = explicitTextColorClass === 'text-white' ? `text-${baseColorName}-700` : explicitTextColorClass;
-        const badgeBorderColorClass = `border-${baseColorName}-200`;
+        let badgeBgClass = `bg-${baseColorName}-100`;
+        let badgeTextColorClass = `text-${baseColorName}-700`;
+        let badgeBorderColorClass = `border-${baseColorName}-200`;
 
-        // Dark mode badge styles
-        const darkBadgeBgClass = `dark:bg-${baseColorName}-800/60`; // Adjusted opacity slightly
-        let darkBadgeTextColorClass: string;
-        if (explicitTextColorClass === 'text-white') {
-          darkBadgeTextColorClass = `dark:text-${baseColorName}-200`;
-        } else {
-          // For dark text on light bg (e.g. text-gray-800), use a light color in dark mode
-           darkBadgeTextColorClass = `dark:text-${baseColorName}-200`; // Fallback, or use a generic light color
-           if (explicitTextColorClass.includes('gray-800') || explicitTextColorClass.includes('black') || explicitTextColorClass.includes('slate-800')) {
-               darkBadgeTextColorClass = 'dark:text-gray-200';
-           }
+        if (explicitTextColorClass !== 'text-white' && !explicitTextColorClass.startsWith('text-gray')) {
+           badgeTextColorClass = explicitTextColorClass; // Use explicit if not white and not generic gray
+        } else if (explicitTextColorClass.startsWith('text-gray')) {
+           badgeTextColorClass = `text-gray-800`; // Ensure dark gray for yellow-like backgrounds
         }
-        const darkBadgeBorderColorClass = `dark:border-${baseColorName}-700`;
+
+
+        let darkBadgeBgClass = `dark:bg-${baseColorName}-800/60`;
+        let darkBadgeTextColorClass = `dark:text-${baseColorName}-200`;
+        let darkBadgeBorderColorClass = `dark:border-${baseColorName}-700`;
+
+        if (badgeTextColorClass.includes('gray-800') || badgeTextColorClass.includes('black')) {
+           darkBadgeTextColorClass = `dark:text-${baseColorName}-100`; // Lighter text for dark themes if original light theme text was very dark
+        }
         
         return {
           name: coreEmotionDetails.name,
@@ -223,26 +223,28 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
       </CardHeader>
       <CardContent>
         {filteredEntries.length > 0 ? (
-          <ScrollArea className="h-[500px] pr-3">
-            <div className="relative pl-4">
-              {/* The main timeline vertical bar */}
-              <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-border -z-10"></div>
+          <ScrollArea className="h-[500px] pr-3"> {/* pr-3 for scrollbar visibility */}
+            <div className="relative py-2"> {/* Container for the line and all entries. py-2 for minor top/bottom spacing. */}
+              {/* The main timeline vertical bar. Positioned 1.5rem (24px) from the left. */}
+              <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-border"></div>
               
-              {filteredEntries.map((entry, index) => {
+              {filteredEntries.map((entry) => {
                 const coreEmotionStyle = getCoreEmotionStyle(entry.moodWords);
                 return (
-                  <div key={entry.id} className="relative pl-10 pb-8 last:pb-0">
-                    {/* Dot on the timeline */}
+                  // Each entry item:
+                  // ml-6 (1.5rem) to align with the line's position.
+                  // pl-8 (2rem) to create space between the line/dot area and the card content.
+                  <div key={entry.id} className="relative ml-6 pl-8 pb-8 last:pb-0">
+                    {/* Dot on the timeline:
+                        - left-0 positions it at the start of its 'ml-6 pl-8' parent.
+                        - -translate-x-1/2 centers the dot on this 'left-0' mark.
+                          Effectively, this centers the dot over the main vertical line (which is at left-6 of the outer container).
+                        - z-10 ensures the dot is above the line.
+                    */}
                     <div className={cn(
-                      "absolute left-[18px] top-[5px] h-5 w-5 rounded-full border-4 border-background", // Adjusted left to align center of the line (24px - 2.5px for half width of dot)
+                      "absolute left-0 top-[5px] h-5 w-5 rounded-full border-4 border-background -translate-x-1/2 z-10",
                       coreEmotionStyle.dotClassName
                     )}></div>
-
-                    {/* Connector line for all but the last item - ensuring it stops before the dot of the next item if items are close */}
-                    {/* This is handled by the main timeline bar now, below conditional line is not strictly needed if main bar is present */}
-                    {/* {index < filteredEntries.length -1 && (
-                       <div className="absolute left-6 top-[25px] bottom-0 w-0.5 bg-border"></div>
-                    )} */}
                     
                     <div className="pt-0.5"> {/* Minor adjustment for card alignment relative to dot */}
                        <p className="text-xs text-muted-foreground flex items-center mb-2">
@@ -297,3 +299,4 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
     </Card>
   );
 }
+
