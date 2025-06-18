@@ -15,14 +15,13 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp;
-let analytics: Analytics | undefined;
-
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
 } else {
   app = getApp();
 }
 
+let analytics: Analytics | undefined;
 if (typeof window !== 'undefined') {
   isSupported().then((supported) => {
     if (supported) {
@@ -39,29 +38,23 @@ const db = getFirestore(app);
 if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
   // Ensure this only runs on the client
   if (typeof window !== 'undefined') {
-    // Check if already connected to avoid re-connecting
-    // This check is a bit simplistic and might need refinement based on Firebase SDK behavior
-    // @ts-ignore
-    if (!auth.emulatorConfig) {
-        try {
-            connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
-            console.log("Firebase Auth Emulator connected.");
-        } catch (error) {
-            console.error("Error connecting to Firebase Auth Emulator:", error);
-        }
+    // Firebase SDK handles if it's already connected, so direct calls are fine.
+    try {
+      console.log("Attempting to connect to Firebase Auth Emulator on http://localhost:9099...");
+      connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
+      console.log("Firebase Auth Emulator connection attempt finished.");
+    } catch (error) {
+        console.error("Error connecting to Firebase Auth Emulator:", error);
     }
-    // @ts-ignore
-    if (!db.emulatorConfig) { // Check for Firestore emulator
-        try {
-            connectFirestoreEmulator(db, 'localhost', 8080);
-            console.log("Firebase Firestore Emulator connected.");
-        } catch (error) {
-            console.error("Error connecting to Firebase Firestore Emulator:", error);
-        }
+    try {
+      console.log("Attempting to connect to Firebase Firestore Emulator on localhost:8080...");
+      connectFirestoreEmulator(db, 'localhost', 8080);
+      console.log("Firebase Firestore Emulator connection attempt finished.");
+    } catch (error) {
+        console.error("Error connecting to Firebase Firestore Emulator:", error);
     }
   }
 }
 
 
 export { app, auth, googleProvider, analytics, db };
-
