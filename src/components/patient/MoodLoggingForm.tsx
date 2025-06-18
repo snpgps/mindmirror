@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { EMOJI_DETAILS, MOOD_WORDS, PREDEFINED_ACTIVITIES } from '@/lib/constants';
-import type { MoodLevel, Activity, MoodEntry } from '@/lib/types';
-import { PlusCircle, Send, Trash2, Edit3, X } from 'lucide-react';
+import { EMOTION_HIERARCHY, PREDEFINED_ACTIVITIES, CoreEmotionData } from '@/lib/constants';
+import type { Activity } from '@/lib/types';
+import { PlusCircle, Send, Trash2, Edit3, X, CheckCircle, Circle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -18,13 +18,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-
+import { cn } from '@/lib/utils';
 
 const moodLoggingSchema = z.object({
-  moodLevel: z.custom<MoodLevel>((val) => typeof val === 'number' && val >= 1 && val <= 5, {
-    message: "Please select your mood.",
-  }),
-  moodWords: z.array(z.string()).min(0, "Select at least one mood word if applicable."),
+  selectedCoreEmotion: z.string().optional(), // Name of the core emotion
+  selectedPrimaryEmotions: z.array(z.string()),
+  selectedSecondaryEmotions: z.array(z.string()),
   activities: z.array(z.object({ id: z.string(), name: z.string() })).min(0, "Select at least one activity if applicable."),
   notes: z.string().max(500, "Notes cannot exceed 500 characters.").optional(),
 });
@@ -32,7 +31,6 @@ const moodLoggingSchema = z.object({
 type MoodLoggingFormData = z.infer<typeof moodLoggingSchema>;
 
 interface MoodLoggingFormProps {
-  // onLogMood is removed as data will be written directly to Firestore and PatientDashboardPage will listen for updates.
   userId: string;
 }
 
@@ -44,12 +42,57 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
   const form = useForm<MoodLoggingFormData>({
     resolver: zodResolver(moodLoggingSchema),
     defaultValues: {
-      moodLevel: 3 as MoodLevel,
-      moodWords: [],
+      selectedCoreEmotion: undefined,
+      selectedPrimaryEmotions: [],
+      selectedSecondaryEmotions: [],
       activities: [],
       notes: '',
     },
   });
+
+  const selectedCoreEmotionKey = form.watch("selectedCoreEmotion");
+  const currentPrimaryEmotions = form.watch("selectedPrimaryEmotions");
+
+  const handleCoreEmotionSelect = (coreKey: string) => {
+    if (form.getValues("selectedCoreEmotion") === coreKey) {
+      form.setValue("selectedCoreEmotion", undefined); // Deselect if already selected
+      form.setValue("selectedPrimaryEmotions", []);
+      form.setValue("selectedSecondaryEmotions", []);
+    } else {
+      form.setValue("selectedCoreEmotion", coreKey);
+      form.setValue("selectedPrimaryEmotions", []); // Reset primary/secondary when core changes
+      form.setValue("selectedSecondaryEmotions", []);
+    }
+  };
+
+  const handlePrimaryEmotionToggle = (primaryKey: string) => {
+    const currentSelection = form.getValues("selectedPrimaryEmotions");
+    const newSelection = currentSelection.includes(primaryKey)
+      ? currentSelection.filter(p => p !== primaryKey)
+      : [...currentSelection, primaryKey];
+    form.setValue("selectedPrimaryEmotions", newSelection);
+
+    // If unselecting a primary, also unselect its secondaries
+    if (!newSelection.includes(primaryKey)) {
+      const coreData = selectedCoreEmotionKey ? EMOTION_HIERARCHY[selectedCoreEmotionKey] : null;
+      if (coreData && coreData.primaryEmotions[primaryKey]?.secondaryEmotions) {
+        const secondariesToClear = coreData.primaryEmotions[primaryKey].secondaryEmotions || [];
+        form.setValue(
+          "selectedSecondaryEmotions",
+          form.getValues("selectedSecondaryEmotions").filter(s => !secondariesToClear.includes(s))
+        );
+      }
+    }
+  };
+
+  const handleSecondaryEmotionToggle = (secondaryName: string) => {
+    const currentSelection = form.getValues("selectedSecondaryEmotions");
+    const newSelection = currentSelection.includes(secondaryName)
+      ? currentSelection.filter(s => s !== secondaryName)
+      : [...currentSelection, secondaryName];
+    form.setValue("selectedSecondaryEmotions", newSelection);
+  };
+
 
   const handleAddCustomActivity = () => {
     if (newActivityName.trim() && !customActivities.find(act => act.name === newActivityName.trim()) && !PREDEFINED_ACTIVITIES.find(act => act.name === newActivityName.trim())) {
@@ -63,31 +106,47 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
       form.setValue("activities", [...currentActivities, {id: newActivity.id, name: newActivity.name}]);
       setNewActivityName('');
       toast({ title: "Activity Added", description: `${newActivity.name} has been added to your list and selected.` });
-      document.getElementById('dialog-close-button')?.click(); 
+      document.getElementById('dialog-close-button')?.click();
     } else {
       toast({ variant: "destructive", title: "Error", description: "Activity name is empty or already exists." });
     }
   };
-  
+
   const allActivities = [...PREDEFINED_ACTIVITIES, ...customActivities];
 
   async function onSubmit(data: MoodLoggingFormData) {
+    const moodWords: string[] = [];
+    if (data.selectedCoreEmotion && EMOTION_HIERARCHY[data.selectedCoreEmotion]) {
+      moodWords.push(EMOTION_HIERARCHY[data.selectedCoreEmotion].name);
+    }
+    data.selectedPrimaryEmotions.forEach(pkey => {
+      if(data.selectedCoreEmotion && EMOTION_HIERARCHY[data.selectedCoreEmotion]?.primaryEmotions[pkey]) {
+        moodWords.push(EMOTION_HIERARCHY[data.selectedCoreEmotion].primaryEmotions[pkey].name);
+      }
+    });
+    moodWords.push(...data.selectedSecondaryEmotions);
+    
+    if (moodWords.length === 0 && !data.notes && data.activities.length === 0) {
+      toast({ variant: "destructive", title: "Empty Log", description: "Please select at least one emotion or add a note/activity." });
+      return;
+    }
+
     try {
       await addDoc(collection(db, "users", userId, "moodEntries"), {
         userId,
-        moodLevel: data.moodLevel,
-        moodWords: data.moodWords,
+        moodWords: Array.from(new Set(moodWords)), // Ensure uniqueness
         activities: data.activities.map(a => ({ id: a.id, name: a.name, isCustom: customActivities.some(ca => ca.id === a.id) })),
         notes: data.notes,
-        timestamp: serverTimestamp(), // Firestore server timestamp
+        timestamp: serverTimestamp(),
       });
-      form.reset({ 
-        moodLevel: 3 as MoodLevel, // Reset to default values
-        moodWords: [],
+      form.reset({
+        selectedCoreEmotion: undefined,
+        selectedPrimaryEmotions: [],
+        selectedSecondaryEmotions: [],
         activities: [],
         notes: '',
       });
-      toast({ title: "Mood Logged!", description: "Your mood entry has been saved to the cloud." });
+      toast({ title: "Mood Logged!", description: "Your mood entry has been saved." });
     } catch (e) {
       console.error("Error adding document: ", e);
       toast({
@@ -98,92 +157,112 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
     }
   }
 
+  const coreEmotions = Object.entries(EMOTION_HIERARCHY);
+
   return (
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle className="font-headline text-2xl">How are you feeling?</CardTitle>
-        <CardDescription>Log your current mood, associated feelings, and activities.</CardDescription>
+        <CardDescription>Select your core emotion, then refine with more specific feelings.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <FormField
-              control={form.control}
-              name="moodLevel"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-lg font-semibold">Your Mood</FormLabel>
-                  <FormControl>
-                    <div className="flex justify-around items-center p-4 bg-muted/50 rounded-lg">
-                      {Object.entries(EMOJI_DETAILS).map(([level, { emoji, label, colorClass }]) => (
-                        <button
-                          type="button"
-                          key={level}
-                          onClick={() => field.onChange(parseInt(level) as MoodLevel)}
-                          className={`p-2 rounded-full transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary ${
-                            field.value === parseInt(level) ? 'transform scale-125 ring-2 ring-primary bg-primary/20' : 'hover:scale-110'
-                          }`}
-                          aria-label={`${label} mood`}
-                        >
-                          <span className={`text-4xl md:text-5xl ${colorClass}`}>{emoji}</span>
-                          <span className={`block text-xs mt-1 font-medium ${field.value === parseInt(level) ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Core Emotion Selection */}
+            <FormItem>
+              <FormLabel className="text-lg font-semibold">Core Emotion</FormLabel>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
+                {coreEmotions.map(([key, { name, colorClass }]) => (
+                  <Button
+                    key={key}
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "justify-start p-4 h-auto text-left transition-all duration-150 ease-in-out",
+                      selectedCoreEmotionKey === key ? `${colorClass} ring-2 ring-offset-2 ring-current` : "border-border hover:bg-muted/50",
+                      selectedCoreEmotionKey === key ? "shadow-md scale-105" : "hover:shadow-sm"
+                    )}
+                    onClick={() => handleCoreEmotionSelect(key)}
+                  >
+                     {selectedCoreEmotionKey === key ? <CheckCircle className="mr-2 h-5 w-5" /> : <Circle className="mr-2 h-5 w-5 text-muted-foreground/50" />}
+                    <span className="font-medium">{name}</span>
+                  </Button>
+                ))}
+              </div>
+            </FormItem>
 
-            <FormField
-              control={form.control}
-              name="moodWords"
-              render={() => (
-                <FormItem>
-                  <FormLabel className="text-lg font-semibold">I&apos;m Feeling...</FormLabel>
-                  <ScrollArea className="h-40 rounded-md border p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                    {MOOD_WORDS.map((word) => (
-                      <FormField
-                        key={word}
-                        control={form.control}
-                        name="moodWords"
-                        render={({ field }) => {
-                          return (
-                            <FormItem
-                              key={word}
-                              className="flex flex-row items-center space-x-3 space-y-0"
-                            >
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(word)}
-                                  onCheckedChange={(checked) => {
-                                    return checked
-                                      ? field.onChange([...(field.value || []), word])
-                                      : field.onChange(
-                                          (field.value || []).filter(
-                                            (value) => value !== word
-                                          )
-                                        );
-                                  }}
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm font-normal">
-                                {word}
-                              </FormLabel>
-                            </FormItem>
-                          );
-                        }}
-                      />
-                    ))}
-                  </div>
-                  </ScrollArea>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Primary Emotion Selection */}
+            {selectedCoreEmotionKey && EMOTION_HIERARCHY[selectedCoreEmotionKey] && (
+              <FormField
+                control={form.control}
+                name="selectedPrimaryEmotions"
+                render={() => (
+                  <FormItem>
+                    <FormLabel className="text-lg font-semibold">Feeling more specifically...</FormLabel>
+                     <ScrollArea className="h-48 rounded-md border p-4">
+                      <div className="space-y-2">
+                        {Object.entries(EMOTION_HIERARCHY[selectedCoreEmotionKey].primaryEmotions).map(([pkey, pdata]) => (
+                           <div key={pkey} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/30 transition-colors">
+                            <Checkbox
+                              id={`primary-${pkey}`}
+                              checked={form.getValues("selectedPrimaryEmotions").includes(pkey)}
+                              onCheckedChange={() => handlePrimaryEmotionToggle(pkey)}
+                            />
+                            <label htmlFor={`primary-${pkey}`} className="text-sm font-normal cursor-pointer flex-1">
+                              {pdata.name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             
+            {/* Secondary Emotion Selection */}
+            {selectedCoreEmotionKey && currentPrimaryEmotions.length > 0 && (
+              <FormField
+                control={form.control}
+                name="selectedSecondaryEmotions"
+                render={() => (
+                  <FormItem>
+                    <FormLabel className="text-lg font-semibold">Any of these too?</FormLabel>
+                    <ScrollArea className="h-48 rounded-md border p-4">
+                      <div className="space-y-2">
+                        {currentPrimaryEmotions.map(pkey => {
+                          const primaryData = EMOTION_HIERARCHY[selectedCoreEmotionKey]?.primaryEmotions[pkey];
+                          if (primaryData && primaryData.secondaryEmotions && primaryData.secondaryEmotions.length > 0) {
+                            return (
+                              <div key={`secondary-group-${pkey}`} className="pl-4 border-l-2 border-muted ml-2 py-1">
+                                <p className="text-xs font-medium text-muted-foreground mb-1">{primaryData.name} related:</p>
+                                {primaryData.secondaryEmotions.map(sname => (
+                                  <div key={sname} className="flex items-center space-x-3 p-1 rounded-md hover:bg-muted/20 transition-colors">
+                                    <Checkbox
+                                      id={`secondary-${sname.replace(/\s+/g, '-')}`}
+                                      checked={form.getValues("selectedSecondaryEmotions").includes(sname)}
+                                      onCheckedChange={() => handleSecondaryEmotionToggle(sname)}
+                                    />
+                                    <label htmlFor={`secondary-${sname.replace(/\s+/g, '-')}`} className="text-sm font-normal cursor-pointer flex-1">
+                                      {sname}
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    </ScrollArea>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+
             <FormField
               control={form.control}
               name="activities"
@@ -201,10 +280,10 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
                         <DialogHeader>
                           <DialogTitle>Add Custom Activity</DialogTitle>
                         </DialogHeader>
-                        <Input 
-                          placeholder="E.g., Morning Walk" 
-                          value={newActivityName} 
-                          onChange={(e) => setNewActivityName(e.target.value)} 
+                        <Input
+                          placeholder="E.g., Morning Walk"
+                          value={newActivityName}
+                          onChange={(e) => setNewActivityName(e.target.value)}
                         />
                         <DialogFooter>
                           <DialogClose asChild>
@@ -285,4 +364,3 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
     </Card>
   );
 }
-

@@ -29,11 +29,10 @@ export default function PatientDashboardPage() {
           fetchedEntries.push({
             id: doc.id,
             userId: data.userId,
-            moodLevel: data.moodLevel,
-            moodWords: data.moodWords,
+            moodWords: data.moodWords || [], // Ensure moodWords is an array
             activities: data.activities,
             notes: data.notes,
-            timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() || new Date().toISOString(), 
+            timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
           });
         });
         setMoodEntries(fetchedEntries);
@@ -54,11 +53,11 @@ export default function PatientDashboardPage() {
       setLoadingEntries(false);
     }
   }, [user, authLoading, toast]);
-  
+
   if (authLoading || !user) {
      return (
         <div className="space-y-8">
-          <Skeleton className="h-96 w-full rounded-lg" />
+          <Skeleton className="h-[70vh] w-full rounded-lg" />
           <Skeleton className="h-64 w-full rounded-lg" />
         </div>
       );
@@ -83,4 +82,3 @@ export default function PatientDashboardPage() {
     </div>
   );
 }
-

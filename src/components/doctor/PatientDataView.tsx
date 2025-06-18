@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { User, Mail, CalendarClock, FileText } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
-import { useToast } from '@/hooks/use-toast'; // Added useToast for error handling
+import { useToast } from '@/hooks/use-toast';
 
 interface PatientDataViewProps {
   patient: Patient | null;
@@ -17,7 +17,7 @@ interface PatientDataViewProps {
 export function PatientDataView({ patient }: PatientDataViewProps) {
   const [patientEntries, setPatientEntries] = useState<MoodEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast(); // Initialize toast
+  const { toast } = useToast();
 
   useEffect(() => {
     if (patient?.id) {
@@ -32,8 +32,7 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
           fetchedEntries.push({
             id: doc.id,
             userId: data.userId,
-            moodLevel: data.moodLevel,
-            moodWords: data.moodWords,
+            moodWords: data.moodWords || [], // Ensure moodWords is an array
             activities: data.activities,
             notes: data.notes,
             timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
@@ -43,7 +42,7 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
         setLoading(false);
       }, (error) => {
         console.error(`Error fetching mood entries for patient ${patient.id}: `, error);
-        toast({ // Toast for error
+        toast({
           variant: "destructive",
           title: "Error Loading Patient Data",
           description: `Could not load mood entries for ${patient.name}. Please try again.`,
@@ -55,9 +54,9 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
       return () => unsubscribe(); // Cleanup listener
     } else {
       setPatientEntries([]); // Clear entries if no patient is selected
-      setLoading(false); 
+      setLoading(false);
     }
-  }, [patient, toast]); // Added toast to dependencies
+  }, [patient, toast]);
 
   if (!patient) {
     return (
@@ -70,7 +69,7 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
       </Card>
     );
   }
-  
+
   if (loading) {
      return (
       <Card className="shadow-lg">
@@ -99,7 +98,7 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
           </CardDescription>
         </CardHeader>
       </Card>
-      
+
       <h2 className="font-headline text-xl font-semibold mt-6 mb-3">Mood Timeline</h2>
       {patientEntries.length > 0 ? (
         <MoodTimeline entries={patientEntries} />
@@ -114,4 +113,3 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
     </div>
   );
 }
-
