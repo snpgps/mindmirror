@@ -1,7 +1,7 @@
 
 "use client";
 import { useState, useEffect, useMemo } from 'react';
-import type { Patient, User } from '@/lib/types';
+import type { Patient, User, Doctor } from '@/lib/types'; // Added Doctor type
 import { PatientList } from '@/components/doctor/PatientList';
 import { PatientDataView } from '@/components/doctor/PatientDataView';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,39 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, onSnapshot, DocumentData } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-
-// Function to get patients linked to a doctor from Firestore
-const getLinkedPatientsFromFirestore = async (doctorCode: string): Promise<Patient[]> => {
-  if (!doctorCode) return [];
-  try {
-    // Query the 'users' collection for documents where 'role' is 'patient'
-    // AND 'linkedDoctorCode' matches the current doctor's code.
-    const usersCollectionRef = collection(db, "users");
-    const q = query(usersCollectionRef, 
-                    where("role", "==", "patient"), 
-                    where("linkedDoctorCode", "==", doctorCode));
-    
-    const querySnapshot = await getDocs(q);
-    const patients: Patient[] = [];
-    querySnapshot.forEach((doc) => {
-      const data = doc.data() as DocumentData;
-      // Ensure the data matches the Patient type structure
-      patients.push({
-        id: doc.id,
-        name: data.name || "Unknown Patient",
-        email: data.email || "No email",
-        role: 'patient',
-        linkedDoctorCode: data.linkedDoctorCode,
-      });
-    });
-    return patients;
-  } catch (error) {
-    console.error("Error fetching linked patients from Firestore: ", error);
-    // Potentially show a toast to the doctor
-    return []; // Return empty array on error
-  }
-};
-
+import { Card, CardContent } from '@/components/ui/card'; // Added Card, CardContent
+import { Users } from 'lucide-react'; // Added Users icon
 
 export default function DoctorDashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -56,7 +25,6 @@ export default function DoctorDashboardPage() {
     if (doctorCode && !authLoading) {
       setLoadingData(true);
       
-      // Listener for real-time updates on patients linked to this doctor
       const usersCollectionRef = collection(db, "users");
       const q = query(usersCollectionRef, 
                       where("role", "==", "patient"), 
@@ -86,10 +54,10 @@ export default function DoctorDashboardPage() {
         setLoadingData(false);
       });
 
-      return () => unsubscribe(); // Cleanup listener on component unmount
+      return () => unsubscribe();
 
     } else if (!authLoading) {
-       setLoadingData(false); // Not a doctor or no doctorCode, stop loading
+       setLoadingData(false);
     }
   }, [doctorCode, authLoading, toast]);
 
@@ -103,13 +71,12 @@ export default function DoctorDashboardPage() {
   }
   
   if(user.role !== 'doctor'){
-    // This case should ideally be handled by the layout, but as a safeguard:
     return <p>Access Denied. This page is for doctors only.</p>;
   }
 
   return (
     <div className="space-y-6">
-       <div>
+       <div className="mb-6">
         <h1 className="font-headline text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
           Doctor Dashboard
         </h1>
@@ -120,19 +87,39 @@ export default function DoctorDashboardPage() {
       
       {loadingData ? (
          <div className="grid md:grid-cols-[minmax(300px,_350px)_1fr] gap-6 h-full">
-          <Skeleton className="h-[calc(100vh-12rem)] w-full rounded-lg" /> {/* Adjusted height for header */}
-          <Skeleton className="h-[calc(100vh-12rem)] w-full rounded-lg" /> {/* Adjusted height for header */}
+          <Skeleton className="h-[calc(100vh-12rem)] w-full rounded-lg" />
+          <Skeleton className="h-[calc(100vh-12rem)] w-full rounded-lg" />
         </div>
+      ) : patients.length === 0 ? (
+        <Card className="shadow-lg mt-8">
+          <CardContent className="text-center py-16">
+            <Users className="mx-auto h-20 w-20 text-primary/70 mb-8" />
+            <h2 className="text-2xl font-semibold text-foreground mb-3">No Patients Linked Yet</h2>
+            <p className="text-md text-muted-foreground max-w-md mx-auto">
+              It looks like you don&apos;t have any patients connected to your MindMirror account. 
+              To start viewing their mood logs, please ask them to enter your Doctor Code in their app.
+            </p>
+            <p className="text-muted-foreground mt-6 mb-2">Your unique Doctor Code to share is:</p>
+            <div className="inline-block bg-primary/10 border border-primary/30 rounded-lg px-6 py-3">
+                <p className="text-3xl font-bold text-primary tracking-wider">
+                {doctorCode || 'N/A'}
+                </p>
+            </div>
+            <p className="text-xs text-muted-foreground mt-6 max-w-sm mx-auto">
+              Once a patient links using this code, their data will appear here automatically.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-[minmax(300px,_350px)_1fr] gap-6 items-start">
-          <div className="sticky top-20 self-start"> {/* Make patient list sticky */}
+          <div className="sticky top-20 self-start">
             <PatientList 
               patients={patients} 
               onSelectPatient={setSelectedPatient}
               selectedPatientId={selectedPatient?.id}
             />
           </div>
-          <div className="min-w-0"> {/* Ensure this column can shrink */}
+          <div className="min-w-0">
             <PatientDataView patient={selectedPatient} />
           </div>
         </div>
