@@ -3,15 +3,17 @@
 import React, { useState } from 'react';
 import type { MoodEntry, Activity } from '@/lib/types';
 import { EMOTION_HIERARCHY, PREDEFINED_ACTIVITIES, ALL_EMOTION_WORDS } from '@/lib/constants';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, parseISO } from 'date-fns';
-import { CalendarDays, Tag, ListChecks, Filter, X, Palette, CircleDot } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Checkbox } from '../ui/checkbox';
-import { Label } from '../ui/label';
+import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import type { DateRange } from 'react-day-picker';
+import { CalendarDays, Tag, ListChecks, Filter, X, CircleDot, CalendarIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 
 interface MoodTimelineProps {
@@ -21,6 +23,7 @@ interface MoodTimelineProps {
 export function MoodTimeline({ entries }: MoodTimelineProps) {
   const [selectedMoodWordsFilter, setSelectedMoodWordsFilter] = useState<string[]>([]);
   const [selectedActivitiesFilter, setSelectedActivitiesFilter] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const handleMoodWordFilterChange = (word: string, checked: boolean) => {
     setSelectedMoodWordsFilter(prev => checked ? [...prev, word] : prev.filter(w => w !== word));
@@ -35,27 +38,51 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
   const filteredEntries = entries.filter(entry => {
     const moodWordMatch = selectedMoodWordsFilter.length === 0 || (entry.moodWords && entry.moodWords.some(word => selectedMoodWordsFilter.includes(word)));
     const activityMatch = selectedActivitiesFilter.length === 0 || (entry.activities && entry.activities.some(activity => selectedActivitiesFilter.includes(activity.name)));
-    return moodWordMatch && activityMatch;
+    
+    let dateMatch = true;
+    if (dateRange?.from) {
+      const entryDate = parseISO(entry.timestamp);
+      const from = startOfDay(dateRange.from);
+      // If only 'from' is selected, match entries on or after 'from'
+      // If 'to' is also selected, match entries within the interval
+      const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date()); // Default 'to' to today if not set for range
+      
+      if (dateRange.to) {
+        dateMatch = isWithinInterval(entryDate, { start: from, end: to });
+      } else {
+        // If only from date is picked, filter from that date onwards
+         dateMatch = entryDate >= from;
+      }
+    }
+    
+    return moodWordMatch && activityMatch && dateMatch;
   }).sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime());
 
   const clearFilters = () => {
     setSelectedMoodWordsFilter([]);
     setSelectedActivitiesFilter([]);
+    setDateRange(undefined);
   };
+  
+  const activeFilterCount = [
+    selectedMoodWordsFilter.length > 0,
+    selectedActivitiesFilter.length > 0,
+    !!dateRange?.from
+  ].filter(Boolean).length;
 
   const getCoreEmotionStyle = (moodWords: string[]): { name: string, badgeClassName: string, dotClassName: string } => {
     if (!moodWords || moodWords.length === 0) return { name: "Mood", badgeClassName: "bg-muted text-muted-foreground border-border", dotClassName: "bg-muted-foreground" };
     const firstWord = moodWords[0];
     for (const coreKey in EMOTION_HIERARCHY) {
       if (EMOTION_HIERARCHY[coreKey].name === firstWord) {
-        const baseColorClass = EMOTION_HIERARCHY[coreKey].colorClass.split(' ')[0]; // e.g., bg-green-500
+        const baseColorClass = EMOTION_HIERARCHY[coreKey].colorClass.split(' ')[0]; 
         const textColorClass = EMOTION_HIERARCHY[coreKey].colorClass.includes('text-white') ? 'text-white' : `text-${baseColorClass.split('-')[1]}-700`;
         const borderColorClass = `border-${baseColorClass.split('-')[1]}-300`;
         
         return {
           name: EMOTION_HIERARCHY[coreKey].name,
           badgeClassName: `${baseColorClass.replace('-500', '-100')} ${textColorClass.replace('-700', '-800')} ${borderColorClass.replace('-300','-200')} dark:${baseColorClass.replace('-500', '-800/70')} dark:${textColorClass.replace('-700', '-200')} dark:${borderColorClass.replace('-300','-700')}`,
-          dotClassName: `${baseColorClass}` // The solid color for the dot
+          dotClassName: `${baseColorClass}` 
         };
       }
     }
@@ -84,10 +111,53 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
           <div className="flex gap-2 flex-wrap">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline"><Filter className="mr-2 h-4 w-4" /> Filter ({filteredEntries.length} / {entries.length})</Button>
+                <Button variant="outline">
+                  <Filter className="mr-2 h-4 w-4" /> 
+                  Filter ({activeFilterCount > 0 ? `${activeFilterCount} active, ` : ''}{filteredEntries.length} / {entries.length})
+                </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80">
+              <PopoverContent className="w-80 md:w-96">
                 <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none">Filter by Date Range</h4>
+                     <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            id="date"
+                            variant={"outline"}
+                            className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !dateRange && "text-muted-foreground"
+                            )}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateRange?.from ? (
+                            dateRange.to ? (
+                                <>
+                                {format(dateRange.from, "LLL dd, y")} -{" "}
+                                {format(dateRange.to, "LLL dd, y")}
+                                </>
+                            ) : (
+                                format(dateRange.from, "LLL dd, y")
+                            )
+                            ) : (
+                            <span>Pick a date range</span>
+                            )}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={dateRange?.from}
+                            selected={dateRange}
+                            onSelect={setDateRange}
+                            numberOfMonths={1}
+                        />
+                        </PopoverContent>
+                    </Popover>
+                  </div>
+
                   <div className="space-y-2">
                     <h4 className="font-medium leading-none">Filter by Emotions</h4>
                     <ScrollArea className="h-32 border rounded-md p-2">
@@ -118,7 +188,7 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
                     ))}
                      </ScrollArea>
                   </div>
-                  {(selectedMoodWordsFilter.length > 0 || selectedActivitiesFilter.length > 0) && (
+                  {activeFilterCount > 0 && (
                      <Button variant="ghost" size="sm" onClick={clearFilters} className="text-accent hover:text-accent/80 justify-start p-1">
                         <X className="mr-2 h-4 w-4" /> Clear All Filters
                     </Button>
@@ -133,25 +203,22 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
         {filteredEntries.length > 0 ? (
           <ScrollArea className="h-[500px] pr-3">
             <div className="relative pl-4">
-              {/* Vertical line */}
               <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-border -z-10"></div>
               
               {filteredEntries.map((entry, index) => {
                 const coreEmotionStyle = getCoreEmotionStyle(entry.moodWords);
                 return (
                   <div key={entry.id} className="relative pl-10 pb-8 last:pb-0">
-                    {/* Dot on the timeline */}
                     <div className={cn(
                       "absolute left-[18px] top-[5px] h-5 w-5 rounded-full border-4 border-background",
                       coreEmotionStyle.dotClassName
                     )}></div>
 
-                    {/* Connector line for all but the last item */}
                     {index < filteredEntries.length -1 && (
                        <div className="absolute left-6 top-[25px] bottom-0 w-0.5 bg-border"></div>
                     )}
                     
-                    <div className="pt-0.5"> {/* Align content with the dot */}
+                    <div className="pt-0.5"> 
                        <p className="text-xs text-muted-foreground flex items-center mb-2">
                           <CalendarDays className="mr-1.5 h-3 w-3" />
                           {format(parseISO(entry.timestamp), "PPpp")}
@@ -204,3 +271,4 @@ export function MoodTimeline({ entries }: MoodTimelineProps) {
     </Card>
   );
 }
+
