@@ -1,6 +1,8 @@
+
 import { AuthForm } from "@/components/auth/AuthForm";
 import Navbar from "@/components/shared/Navbar";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
   return (
@@ -20,3 +22,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
