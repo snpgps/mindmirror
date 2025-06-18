@@ -2,6 +2,7 @@
 import { initializeApp, getApps, FirebaseApp, getApp } from 'firebase/app';
 import { getAnalytics, Analytics, isSupported } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBMzy6-a6TMJJc33CNRqD0nmKdZpgT_ABw",
@@ -32,6 +33,7 @@ if (typeof window !== 'undefined') {
 
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
+const db = getFirestore(app);
 
 // If you want to use the Firebase Emulator Suite for local development
 if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
@@ -48,8 +50,18 @@ if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBA
             console.error("Error connecting to Firebase Auth Emulator:", error);
         }
     }
+    // @ts-ignore
+    if (!db.emulatorConfig) { // Check for Firestore emulator
+        try {
+            connectFirestoreEmulator(db, 'localhost', 8080);
+            console.log("Firebase Firestore Emulator connected.");
+        } catch (error) {
+            console.error("Error connecting to Firebase Firestore Emulator:", error);
+        }
+    }
   }
 }
 
 
-export { app, auth, googleProvider, analytics };
+export { app, auth, googleProvider, analytics, db };
+

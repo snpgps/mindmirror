@@ -1,3 +1,4 @@
+
 "use client"; // For useState, useEffect and useAuth
 import { useState, useEffect } from 'react';
 import { MoodLoggingForm } from '@/components/patient/MoodLoggingForm';
@@ -5,37 +6,54 @@ import { MoodTimeline } from '@/components/patient/MoodTimeline';
 import type { MoodEntry } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
+import { db } from '@/lib/firebase';
+import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 export default function PatientDashboardPage() {
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
   const { user, loading: authLoading } = useAuth();
   const [loadingEntries, setLoadingEntries] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (user?.id) {
-      // Mock: Load entries from localStorage
-      const storedEntries = localStorage.getItem(`mindmirror-entries-${user.id}`);
-      if (storedEntries) {
-        try {
-          setMoodEntries(JSON.parse(storedEntries));
-        } catch (error) {
-          console.error("Failed to parse mood entries from localStorage", error);
-          setMoodEntries([]);
-        }
-      }
-      setLoadingEntries(false);
-    } else if (!authLoading) { // If not auth loading and no user, stop loading entries
-      setLoadingEntries(false);
-    }
-  }, [user, authLoading]);
+    if (user?.id && !authLoading) {
+      setLoadingEntries(true);
+      const entriesCollectionRef = collection(db, "users", user.id, "moodEntries");
+      const q = query(entriesCollectionRef, orderBy("timestamp", "desc"));
 
-  const handleLogMood = (newEntry: MoodEntry) => {
-    const updatedEntries = [newEntry, ...moodEntries];
-    setMoodEntries(updatedEntries);
-    if (user?.id) {
-      localStorage.setItem(`mindmirror-entries-${user.id}`, JSON.stringify(updatedEntries));
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const fetchedEntries: MoodEntry[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          fetchedEntries.push({
+            id: doc.id,
+            userId: data.userId,
+            moodLevel: data.moodLevel,
+            moodWords: data.moodWords,
+            activities: data.activities,
+            notes: data.notes,
+            timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() || new Date().toISOString(), 
+          });
+        });
+        setMoodEntries(fetchedEntries);
+        setLoadingEntries(false);
+      }, (error) => {
+        console.error("Error fetching mood entries: ", error);
+        toast({
+          variant: "destructive",
+          title: "Error Loading Entries",
+          description: "Could not load your mood entries. Please try again later.",
+        });
+        setLoadingEntries(false);
+      });
+
+      return () => unsubscribe(); // Cleanup listener on component unmount
+    } else if (!authLoading) { // If auth is done loading and still no user
+      setMoodEntries([]);
+      setLoadingEntries(false);
     }
-  };
+  }, [user, authLoading, toast]);
   
   if (authLoading || !user) {
      return (
@@ -56,7 +74,7 @@ export default function PatientDashboardPage() {
           Ready to reflect? Log your mood and see your progress.
         </p>
       </div>
-      <MoodLoggingForm onLogMood={handleLogMood} userId={user.id} />
+      <MoodLoggingForm userId={user.id} />
       {loadingEntries ? (
          <Skeleton className="h-96 w-full rounded-lg" />
       ) : (
@@ -65,3 +83,4 @@ export default function PatientDashboardPage() {
     </div>
   );
 }
+

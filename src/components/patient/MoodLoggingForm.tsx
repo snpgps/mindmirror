@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -15,6 +16,8 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 
 const moodLoggingSchema = z.object({
@@ -29,11 +32,11 @@ const moodLoggingSchema = z.object({
 type MoodLoggingFormData = z.infer<typeof moodLoggingSchema>;
 
 interface MoodLoggingFormProps {
-  onLogMood: (newEntry: MoodEntry) => void;
+  // onLogMood is removed as data will be written directly to Firestore and PatientDashboardPage will listen for updates.
   userId: string;
 }
 
-export function MoodLoggingForm({ onLogMood, userId }: MoodLoggingFormProps) {
+export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
   const [customActivities, setCustomActivities] = useState<Activity[]>([]);
   const [newActivityName, setNewActivityName] = useState('');
   const { toast } = useToast();
@@ -56,7 +59,6 @@ export function MoodLoggingForm({ onLogMood, userId }: MoodLoggingFormProps) {
         isCustom: true,
       };
       setCustomActivities(prev => [...prev, newActivity]);
-      // Also add it to the form's selected activities
       const currentActivities = form.getValues("activities");
       form.setValue("activities", [...currentActivities, {id: newActivity.id, name: newActivity.name}]);
       setNewActivityName('');
@@ -69,19 +71,31 @@ export function MoodLoggingForm({ onLogMood, userId }: MoodLoggingFormProps) {
   
   const allActivities = [...PREDEFINED_ACTIVITIES, ...customActivities];
 
-  function onSubmit(data: MoodLoggingFormData) {
-    const newEntry: MoodEntry = {
-      id: Date.now().toString(),
-      userId,
-      timestamp: new Date().toISOString(),
-      moodLevel: data.moodLevel,
-      moodWords: data.moodWords,
-      activities: data.activities.map(a => ({ id: a.id, name: a.name, isCustom: customActivities.some(ca => ca.id === a.id) })),
-      notes: data.notes,
-    };
-    onLogMood(newEntry);
-    form.reset();
-    toast({ title: "Mood Logged!", description: "Your mood entry has been saved." });
+  async function onSubmit(data: MoodLoggingFormData) {
+    try {
+      await addDoc(collection(db, "users", userId, "moodEntries"), {
+        userId,
+        moodLevel: data.moodLevel,
+        moodWords: data.moodWords,
+        activities: data.activities.map(a => ({ id: a.id, name: a.name, isCustom: customActivities.some(ca => ca.id === a.id) })),
+        notes: data.notes,
+        timestamp: serverTimestamp(), // Firestore server timestamp
+      });
+      form.reset({ 
+        moodLevel: 3 as MoodLevel, // Reset to default values
+        moodWords: [],
+        activities: [],
+        notes: '',
+      });
+      toast({ title: "Mood Logged!", description: "Your mood entry has been saved to the cloud." });
+    } catch (e) {
+      console.error("Error adding document: ", e);
+      toast({
+        variant: "destructive",
+        title: "Logging Failed",
+        description: "Could not save your mood entry. Please try again.",
+      });
+    }
   }
 
   return (
@@ -271,3 +285,4 @@ export function MoodLoggingForm({ onLogMood, userId }: MoodLoggingFormProps) {
     </Card>
   );
 }
+

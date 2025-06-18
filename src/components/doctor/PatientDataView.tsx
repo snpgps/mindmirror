@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useEffect, useState } from 'react';
 import type { Patient, MoodEntry } from '@/lib/types';
@@ -5,6 +6,9 @@ import { MoodTimeline } from '@/components/patient/MoodTimeline'; // Re-use time
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { User, Mail, CalendarClock, FileText } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast'; // Added useToast for error handling
 
 interface PatientDataViewProps {
   patient: Patient | null;
@@ -13,27 +17,47 @@ interface PatientDataViewProps {
 export function PatientDataView({ patient }: PatientDataViewProps) {
   const [patientEntries, setPatientEntries] = useState<MoodEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const { toast } = useToast(); // Initialize toast
 
   useEffect(() => {
-    if (patient) {
+    if (patient?.id) {
       setLoading(true);
-      // Mock: Load patient's entries from localStorage
-      // In a real app, this would be an API call: fetchPatientEntries(patient.id)
-      const storedEntries = localStorage.getItem(`mindmirror-entries-${patient.id}`);
-      if (storedEntries) {
-        try {
-          setPatientEntries(JSON.parse(storedEntries));
-        } catch (e) {
-          setPatientEntries([]);
-        }
-      } else {
+      const entriesCollectionRef = collection(db, "users", patient.id, "moodEntries");
+      const q = query(entriesCollectionRef, orderBy("timestamp", "desc"));
+
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const fetchedEntries: MoodEntry[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          fetchedEntries.push({
+            id: doc.id,
+            userId: data.userId,
+            moodLevel: data.moodLevel,
+            moodWords: data.moodWords,
+            activities: data.activities,
+            notes: data.notes,
+            timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+          });
+        });
+        setPatientEntries(fetchedEntries);
+        setLoading(false);
+      }, (error) => {
+        console.error(`Error fetching mood entries for patient ${patient.id}: `, error);
+        toast({ // Toast for error
+          variant: "destructive",
+          title: "Error Loading Patient Data",
+          description: `Could not load mood entries for ${patient.name}. Please try again.`,
+        });
         setPatientEntries([]);
-      }
-      setLoading(false);
+        setLoading(false);
+      });
+
+      return () => unsubscribe(); // Cleanup listener
     } else {
-      setPatientEntries([]);
+      setPatientEntries([]); // Clear entries if no patient is selected
+      setLoading(false); 
     }
-  }, [patient]);
+  }, [patient, toast]); // Added toast to dependencies
 
   if (!patient) {
     return (
@@ -73,7 +97,6 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
             <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
             {patient.email}
           </CardDescription>
-          {/* Add more patient details if available, like join date etc. */}
         </CardHeader>
       </Card>
       
@@ -91,3 +114,4 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
     </div>
   );
 }
+
