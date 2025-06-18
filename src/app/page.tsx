@@ -1,3 +1,4 @@
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -12,17 +13,17 @@ export default function HomePage() {
         {/* Hero Section */}
         <section className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-br from-primary/10 via-background to-accent/10">
           <div className="container px-4 md:px-6">
-            <div className="grid gap-6 lg:grid-cols-[1fr_400px] lg:gap-12 xl:grid-cols-[1fr_600px]">
-              <div className="flex flex-col justify-center space-y-4">
+            <div className="grid gap-6 lg:grid-cols-1 lg:gap-12">
+              <div className="flex flex-col justify-center space-y-4 text-center lg:text-left">
                 <div className="space-y-2">
                   <h1 className="font-headline text-4xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none">
                     Reflect, Understand, Grow with <span className="text-primary">MindMirror</span>
                   </h1>
-                  <p className="max-w-[600px] text-muted-foreground md:text-xl">
+                  <p className="max-w-[600px] text-muted-foreground md:text-xl mx-auto lg:mx-0">
                     Your personal companion for logging moods, tracking activities, and gaining valuable insights into your mental well-being.
                   </p>
                 </div>
-                <div className="flex flex-col gap-2 min-[400px]:flex-row">
+                <div className="flex flex-col gap-2 min-[400px]:flex-row justify-center lg:justify-start">
                   <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
                     <Link href="/signup">Get Started for Free</Link>
                   </Button>
@@ -31,14 +32,6 @@ export default function HomePage() {
                   </Button>
                 </div>
               </div>
-              <Image
-                src="https://placehold.co/600x400.png"
-                alt="Calm person meditating"
-                data-ai-hint="wellness meditation"
-                width={600}
-                height={400}
-                className="mx-auto aspect-video overflow-hidden rounded-xl object-cover sm:w-full lg:order-last lg:aspect-square shadow-lg"
-              />
             </div>
           </div>
         </section>
