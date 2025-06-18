@@ -18,9 +18,9 @@ import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
-  loading: boolean;
+  loading: boolean; // For initial auth state resolution
   isAuthenticated: boolean;
-  isProcessingAuth: boolean;
+  isProcessingAuth: boolean; // For active sign-in/sign-up attempts
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string, name: string, role: UserRole, doctorCode?: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -32,8 +32,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isProcessingAuth, setIsProcessingAuth] = useState(false);
+  const [loading, setLoading] = useState(true); // True initially until onAuthStateChanged resolves for the first time
+  const [isProcessingAuth, setIsProcessingAuth] = useState(false); // For active operations like login/signup buttons
   const router = useRouter();
 
   const updateUserInContext = useCallback(async (updatedProfileData: Partial<User>) => {
@@ -53,20 +53,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUserType | null) => {
-      setLoading(true);
-      setIsProcessingAuth(true); 
+      setLoading(true); // Indicates that auth state is being checked/resolved
+      
       let appUser: User | null = null;
 
       if (firebaseUser) {
         const userDocRef = doc(db, "users", firebaseUser.uid);
         try {
           let userProfileSnap = await getDoc(userDocRef);
+          const providerId = firebaseUser.providerData?.[0]?.providerId;
 
-          // If doc not found for an email user, try once more after a short delay
-          if (!userProfileSnap.exists() && firebaseUser.providerData?.[0]?.providerId === 'password') {
+          if (!userProfileSnap.exists() && providerId === 'password') {
             console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} not initially found. Retrying after delay...`);
-            await new Promise(resolve => setTimeout(resolve, 750)); // 750ms delay
-            userProfileSnap = await getDoc(userDocRef); // Retry getDoc
+            await new Promise(resolve => setTimeout(resolve, 750)); 
+            userProfileSnap = await getDoc(userDocRef);
             if (userProfileSnap.exists()) {
               console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} found after delay.`);
             }
@@ -84,8 +84,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             };
             setUser(appUser);
           } else {
-            // Document still doesn't exist after potential retry
-            const providerId = firebaseUser.providerData?.[0]?.providerId;
             if (providerId === 'google.com') {
               console.log(`onAuthStateChanged: Creating Firestore doc for new Google user ${firebaseUser.uid}`);
               const defaultRole: UserRole = 'patient'; 
@@ -118,13 +116,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       } else { 
         setUser(null);
-        appUser = null;
+        appUser = null; // Ensure appUser is also null here
         if (window.location.pathname.startsWith('/patient') || window.location.pathname.startsWith('/doctor')) {
             router.push('/login');
         }
       }
-      setLoading(false);
-      setIsProcessingAuth(false); 
+      setLoading(false); // Auth state resolution is complete
     });
     return () => unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,10 +131,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsProcessingAuth(true);
     try {
       await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged will handle setting user and navigation
     } catch (error: any) {
       console.error("Google Sign-In error", error);
-      setIsProcessingAuth(false); 
       throw error; 
+    } finally {
+      setIsProcessingAuth(false);
     }
   };
 
@@ -153,7 +152,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (role === 'doctor') {
         if (!doctorCode) {
-          setIsProcessingAuth(false);
           throw new Error("Doctor code is required for doctor role.");
         }
         userProfileData = { id: newAuthUser.uid, name, email: newAuthUser.email!, role, doctorCode };
@@ -166,11 +164,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log(`signUpWithEmail: Firestore doc set for ${newAuthUser.uid}. Setting user in context.`);
       
       setUser(userProfileData as User); 
+      // onAuthStateChanged will also fire, but setUser here makes the state update more immediate.
 
     } catch (error: any) {
       console.error("Email Sign-Up error:", error);
-      setIsProcessingAuth(false); 
       throw error; 
+    } finally {
+      setIsProcessingAuth(false);
     }
   };
 
@@ -178,17 +178,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsProcessingAuth(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged will handle setting user and navigation
     } catch (error: any) {
       console.error("Email Sign-In error", error);
-      setIsProcessingAuth(false); 
       throw error;
+    } finally {
+      setIsProcessingAuth(false);
     }
   };
 
   const logoutUser = async () => {
-    setIsProcessingAuth(true);
+    // No need for setIsProcessingAuth here as it's usually a quick operation
+    // and onAuthStateChanged handles the user state change.
     try {
       await signOut(auth);
+      // onAuthStateChanged will set user to null and handle navigation
     } catch (error: any) {
       console.error("Sign Out error", error);
     }
