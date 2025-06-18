@@ -2,7 +2,7 @@
 "use client";
 import type { User, UserRole, Patient, Doctor } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-import React, { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
+import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { 
   getAuth, 
   onAuthStateChanged, 
@@ -15,17 +15,6 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
-
-// pendingUserProfileDataRef is no longer used for email signups post this change,
-// but might be useful for other scenarios or future refactors if needed.
-// For now, its direct usage in email signup document creation is removed.
-interface PendingUserProfile {
-  uid: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  doctorCode?: string;
-}
 
 interface AuthContextType {
   user: User | null;
@@ -59,23 +48,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
     } catch (error) {
         console.error("Error updating user profile in Firestore or context:", error);
-        // Optionally re-throw or handle with a toast
     }
   }, [user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUserType | null) => {
       setLoading(true);
-      setIsProcessingAuth(true);
+      setIsProcessingAuth(true); 
       let appUser: User | null = null;
 
       if (firebaseUser) {
         const userDocRef = doc(db, "users", firebaseUser.uid);
         try {
-          const userProfileSnap = await getDoc(userDocRef);
+          let userProfileSnap = await getDoc(userDocRef);
+
+          // If doc not found for an email user, try once more after a short delay
+          if (!userProfileSnap.exists() && firebaseUser.providerData?.[0]?.providerId === 'password') {
+            console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} not initially found. Retrying after delay...`);
+            await new Promise(resolve => setTimeout(resolve, 750)); // 750ms delay
+            userProfileSnap = await getDoc(userDocRef); // Retry getDoc
+            if (userProfileSnap.exists()) {
+              console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} found after delay.`);
+            }
+          }
 
           if (userProfileSnap.exists()) {
-            const profileData = userProfileSnap.data() as any;
+            const profileData = userProfileSnap.data() as any; 
             appUser = {
               id: firebaseUser.uid,
               email: firebaseUser.email || profileData.email || '',
@@ -86,12 +84,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             };
             setUser(appUser);
           } else {
-            // Document doesn't exist. This is expected for Google first-time sign-in.
-            // For email/password, doc should have been created by signUpWithEmail.
+            // Document still doesn't exist after potential retry
             const providerId = firebaseUser.providerData?.[0]?.providerId;
             if (providerId === 'google.com') {
               console.log(`onAuthStateChanged: Creating Firestore doc for new Google user ${firebaseUser.uid}`);
-              const defaultRole: UserRole = 'patient'; // Or prompt user for role
+              const defaultRole: UserRole = 'patient'; 
               const name = firebaseUser.displayName || 'New User';
               const email = firebaseUser.email || '';
               const newUserFirestoreData: Patient = { id: firebaseUser.uid, name, email, role: defaultRole };
@@ -99,10 +96,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               appUser = newUserFirestoreData;
               setUser(appUser);
             } else if (providerId === 'password') {
-              // This is now an unexpected state if signUpWithEmail is supposed to create the doc.
               console.error(`CRITICAL: Firestore document for email user ${firebaseUser.uid} is missing. This should have been created during signup. User will be signed out.`);
-              await signOut(auth); // This will re-trigger onAuthStateChanged with firebaseUser = null
-              appUser = null; // Ensure appUser is null before further processing
+              await signOut(auth); 
+              appUser = null; 
             } else {
               console.warn(`User ${firebaseUser.uid} authenticated with unhandled provider ${providerId}. Firestore document missing. Signing out.`);
               await signOut(auth);
@@ -110,7 +106,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
           }
           
-          // Redirection logic (only if appUser was successfully determined)
           if (appUser && (window.location.pathname === '/login' || window.location.pathname === '/signup' || window.location.pathname === '/')) {
               if (appUser.role === 'patient') router.push('/patient/dashboard');
               else if (appUser.role === 'doctor') router.push('/doctor/dashboard');
@@ -118,10 +113,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         } catch (error) {
             console.error("Error in onAuthStateChanged processing user profile:", error);
-            await signOut(auth); // Sign out on error to prevent inconsistent state
-            appUser = null; // setUser(null) handled by subsequent onAuthStateChanged
+            await signOut(auth); 
+            appUser = null; 
         }
-      } else { // No firebaseUser (logged out)
+      } else { 
         setUser(null);
         appUser = null;
         if (window.location.pathname.startsWith('/patient') || window.location.pathname.startsWith('/doctor')) {
@@ -129,22 +124,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
       setLoading(false);
-      setIsProcessingAuth(false);
+      setIsProcessingAuth(false); 
     });
     return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, updateUserInContext]); 
 
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
     try {
       await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged will handle Firestore doc creation if needed and user state update.
     } catch (error: any) {
       console.error("Google Sign-In error", error);
-      setIsProcessingAuth(false); // Explicitly set false on error for this direct action
+      setIsProcessingAuth(false); 
       throw error; 
     }
-    // setIsProcessingAuth(false) will be handled by onAuthStateChanged after this.
   };
 
   const signUpWithEmail = async (email: string, password: string, name: string, role: UserRole, doctorCode?: string) => {
@@ -154,57 +148,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const newAuthUser = userCredential.user;
       await updateFirebaseAuthProfile(newAuthUser, { displayName: name });
       
-      // Directly create Firestore document
       const userDocRef = doc(db, "users", newAuthUser.uid);
       let userProfileData: Patient | Doctor;
 
       if (role === 'doctor') {
-        if (!doctorCode) throw new Error("Doctor code is required for doctor role.");
+        if (!doctorCode) {
+          setIsProcessingAuth(false);
+          throw new Error("Doctor code is required for doctor role.");
+        }
         userProfileData = { id: newAuthUser.uid, name, email: newAuthUser.email!, role, doctorCode };
       } else {
         userProfileData = { id: newAuthUser.uid, name, email: newAuthUser.email!, role };
       }
       
+      console.log(`signUpWithEmail: Attempting to set Firestore doc for ${newAuthUser.uid} with role ${role}`);
       await setDoc(userDocRef, userProfileData);
+      console.log(`signUpWithEmail: Firestore doc set for ${newAuthUser.uid}. Setting user in context.`);
       
-      // Directly set user in context
       setUser(userProfileData as User); 
-      // onAuthStateChanged will still run, find the doc, and confirm the user state.
-      // Redirection will be handled by onAuthStateChanged.
 
     } catch (error: any) {
       console.error("Email Sign-Up error:", error);
-      // setUser(null) is not called here; onAuthStateChanged handles auth state if user creation failed.
-      setIsProcessingAuth(false); // Explicitly set false on error for this direct action
+      setIsProcessingAuth(false); 
       throw error; 
     }
-    // setIsProcessingAuth(false) will be handled by onAuthStateChanged after this.
   };
 
   const signInWithEmail = async (email: string, password: string) => {
     setIsProcessingAuth(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle user state update and redirection.
     } catch (error: any) {
       console.error("Email Sign-In error", error);
-      setIsProcessingAuth(false); // Explicitly set false on error for this direct action
+      setIsProcessingAuth(false); 
       throw error;
     }
-    // setIsProcessingAuth(false) will be handled by onAuthStateChanged after this.
   };
 
   const logoutUser = async () => {
     setIsProcessingAuth(true);
     try {
       await signOut(auth);
-      // onAuthStateChanged will set user to null.
     } catch (error: any) {
       console.error("Sign Out error", error);
-      // setIsProcessingAuth(false) will be handled by onAuthStateChanged
-      // even if error, onAuthStateChanged will reflect current auth state
     }
-    // setIsProcessingAuth(false) will be handled by onAuthStateChanged.
   };
   
   return (
