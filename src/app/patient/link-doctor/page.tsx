@@ -1,9 +1,10 @@
+
 "use client";
 import { LinkDoctorForm } from '@/components/patient/LinkDoctorForm';
-import { useAuth }_ from '@/hooks/useAuth'; // Renamed to avoid conflict
+import { useAuth } from '@/hooks/useAuth'; 
 
 export default function LinkDoctorPage() {
- const { user } = useAuth(); // Using the aliased import
+ const { user } = useAuth(); 
   
   return (
     <div className="max-w-2xl mx-auto py-8">
@@ -14,7 +15,7 @@ export default function LinkDoctorPage() {
           This helps your doctor understand your progress better and provide tailored support.
         </p>
       </div>
-      {user && <LinkDoctorForm patientId={user.id} currentLink={user.role === 'patient' ? user.linkedDoctorCode : undefined} />}
+      {user && user.role === 'patient' && <LinkDoctorForm patientId={user.id} currentLink={user.linkedDoctorCode} />}
     </div>
   );
 }

@@ -1,5 +1,6 @@
+
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth'; // Corrected import path
+import { useAuth } from '@/hooks/useAuth'; 
 import type { Patient } from '@/lib/types';
 import { Link2, CheckCircle, AlertTriangle } from 'lucide-react';
 
@@ -25,8 +26,14 @@ interface LinkDoctorFormProps {
 
 export function LinkDoctorForm({ patientId, currentLink }: LinkDoctorFormProps) {
   const { toast } = useToast();
-  const { user, login } = useAuth(); // login might be needed to update user state
+  const { user, updateUserInContext } = useAuth(); 
   const [linkedDoctorCode, setLinkedDoctorCode] = useState<string | undefined>(currentLink);
+
+  useEffect(() => {
+    // Keep local state in sync if the user prop (and thus currentLink) changes from context
+    setLinkedDoctorCode(currentLink);
+  }, [currentLink]);
+
 
   const form = useForm<LinkDoctorFormData>({
     resolver: zodResolver(linkDoctorSchema),
@@ -36,23 +43,15 @@ export function LinkDoctorForm({ patientId, currentLink }: LinkDoctorFormProps) 
   });
 
   function onSubmit(data: LinkDoctorFormData) {
-    // Mock linking logic
     console.log(`Patient ${patientId} attempting to link with doctor code: ${data.doctorCode}`);
     
-    // Simulate API call
     setTimeout(() => {
-      // Assume doctor code "DRTEST123" is valid
-      if (data.doctorCode === "DRTEST123" || data.doctorCode.startsWith("DR")) {
-        // Update user in AuthContext (mock)
+      // Mock: Assume doctor code "DRTEST123" or any starting with "DR" is valid
+      if (data.doctorCode === "DRTEST123" || data.doctorCode.toUpperCase().startsWith("DR")) {
         if (user && user.role === 'patient') {
-          const updatedPatient = { ...user, linkedDoctorCode: data.doctorCode } as Patient;
-          // This is tricky with mock auth. Ideally, login function in useAuth would update localStorage.
-          // For now, just update local state and show toast.
-          // A proper solution would involve updating the user object in AuthProvider's state.
-          // Let's call login to refresh the user object in localStorage for this demo.
-          login(user.email, user.name, user.role); 
-          localStorage.setItem('mindmirror-user', JSON.stringify(updatedPatient)); // Force update for this demo
-          setLinkedDoctorCode(data.doctorCode);
+          const updatedPatientProfile = { ...user, linkedDoctorCode: data.doctorCode } as Patient;
+          updateUserInContext(updatedPatientProfile); // Update context and localStorage via hook
+          setLinkedDoctorCode(data.doctorCode); // Update local state for UI
         }
         toast({
           title: "Successfully Linked!",
@@ -70,11 +69,9 @@ export function LinkDoctorForm({ patientId, currentLink }: LinkDoctorFormProps) 
   }
 
   const handleUnlink = () => {
-    // Mock unlinking
      if (user && user.role === 'patient') {
-        const updatedPatient = { ...user, linkedDoctorCode: undefined } as Patient;
-        login(user.email, user.name, user.role);
-        localStorage.setItem('mindmirror-user', JSON.stringify(updatedPatient));
+        const updatedPatientProfile = { ...user, linkedDoctorCode: undefined } as Patient;
+        updateUserInContext(updatedPatientProfile);
         setLinkedDoctorCode(undefined);
       }
     toast({
