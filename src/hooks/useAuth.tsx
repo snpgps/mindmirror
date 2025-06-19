@@ -14,7 +14,7 @@ import {
   type User as FirebaseUserType
 } from 'firebase/auth';
 import { auth, googleProvider, db } from '@/lib/firebase';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, deleteField } from 'firebase/firestore'; // Added deleteField
 
 interface AuthContextType {
   user: User | null;
@@ -49,10 +49,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const userDocRef = doc(db, "users", currentUserAuth.uid);
     try {
-      await updateDoc(userDocRef, updatedProfileData);
+      // Prepare data for Firestore, converting undefined to deleteField()
+      const firestoreUpdateData: { [key: string]: any } = {};
+      for (const key in updatedProfileData) {
+        if (Object.prototype.hasOwnProperty.call(updatedProfileData, key)) {
+          const value = (updatedProfileData as any)[key];
+          if (value === undefined) {
+            firestoreUpdateData[key] = deleteField();
+          } else {
+            firestoreUpdateData[key] = value;
+          }
+        }
+      }
+
+      await updateDoc(userDocRef, firestoreUpdateData);
+      
       setUser(currentContextUser => {
         if (!currentContextUser || currentContextUser.id !== currentUserAuth.uid) return currentContextUser; 
         
+        // Use the original updatedProfileData for context update, as undefined is fine for local state
         const newUserData = { ...currentContextUser, ...updatedProfileData };
         
         let changed = false;
@@ -91,12 +106,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const providerId = firebaseUser.providerData?.[0]?.providerId;
 
           if (!userProfileSnap.exists() && providerId === 'password') {
-            console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} not initially found. Retrying after delay...`);
+            // This retry logic might be redundant if signup ensures doc creation before auth state fully propagates.
+            // Consider if this delay is still necessary or if signup is robust enough.
             await new Promise(resolve => setTimeout(resolve, 750)); 
             userProfileSnap = await getDoc(userDocRef);
-            if (userProfileSnap.exists()) {
-              console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} found after delay.`);
-            }
           }
           
           if (userProfileSnap.exists()) {
@@ -111,7 +124,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             };
           } else {
             if (providerId === 'google.com') {
-              console.log(`onAuthStateChanged: Creating Firestore doc for new Google user ${firebaseUser.uid}`);
               const defaultRole: UserRole = 'patient'; 
               const name = firebaseUser.displayName || 'New User';
               const email = firebaseUser.email || '';
@@ -119,7 +131,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               await setDoc(userDocRef, newUserFirestoreData);
               appUser = newUserFirestoreData;
             } else if (providerId === 'password') {
-              console.error(`CRITICAL: Firestore document for email user ${firebaseUser.uid} is missing. This should have been created during signup. User will be signed out.`);
+              console.error(`CRITICAL: Firestore document for email user ${firebaseUser.uid} is missing. User will be signed out.`);
               await signOut(auth); 
               appUser = null; 
             } else {
@@ -161,6 +173,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           initialAuthResolvedRef.current = true;
       }
       
+      // Navigation logic, ensure it's not interfering with active processing
       if (!isProcessingAuthRef.current && initialAuthResolvedRef.current) {
         const currentPath = window.location.pathname;
         if (appUser) {
@@ -188,8 +201,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
     try {
+      // await new Promise(resolve => setTimeout(resolve, 100)); // Delay removed
       await signInWithPopup(auth, googleProvider);
-      // Navigation is handled by onAuthStateChanged
     } catch (error: any) {
       console.error("Google Sign-In error", error);
       setUser(null); 
@@ -202,6 +215,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signUpWithEmail = async (email: string, password: string, name: string, role: UserRole, doctorCode?: string) => {
     setIsProcessingAuth(true);
     try {
+      // await new Promise(resolve => setTimeout(resolve, 100)); // Delay removed
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newAuthUser = userCredential.user;
       await updateFirebaseAuthProfile(newAuthUser, { displayName: name });
@@ -220,10 +234,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       await setDoc(userDocRef, userProfileData); 
-      
-      setUser(userProfileData as User); // Update context immediately
+      setUser(userProfileData as User);
 
-      // Direct navigation after successful signup and state update
+      // await new Promise(resolve => setTimeout(resolve, 500)); // Delay removed
+
       if (userProfileData.role === 'patient') {
         router.push('/patient/dashboard');
       } else if (userProfileData.role === 'doctor') {
@@ -242,8 +256,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signInWithEmail = async (email: string, password: string) => {
     setIsProcessingAuth(true);
     try {
+      // await new Promise(resolve => setTimeout(resolve, 100)); // Delay removed
       await signInWithEmailAndPassword(auth, email, password);
-      // Navigation is handled by onAuthStateChanged
     } catch (error: any) {
       console.error("Email Sign-In error", error);
       setUser(null);
@@ -270,7 +284,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     <AuthContext.Provider value={{ 
       user, 
       loading, 
-      isAuthenticated: !!user && initialAuthResolvedRef.current, 
+      isAuthenticated: !!user && initialAuthResolvedRef.current,
       isProcessingAuth,
       signInWithGoogle,
       signUpWithEmail,
