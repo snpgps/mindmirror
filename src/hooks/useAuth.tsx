@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
 
   const isProcessingAuthRef = useRef(isProcessingAuth);
-  const initialAuthResolvedRef = useRef(false); // Tracks if the *initial* onAuthStateChanged has run
+  const initialAuthResolvedRef = useRef(false); 
 
   useEffect(() => {
     isProcessingAuthRef.current = isProcessingAuth;
@@ -55,6 +55,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         const newUserData = { ...currentContextUser, ...updatedProfileData };
         
+        // Check if actual data changed to prevent unnecessary state updates
         let changed = false;
         if (currentContextUser.id !== newUserData.id ||
             currentContextUser.email !== newUserData.email ||
@@ -91,6 +92,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const providerId = firebaseUser.providerData?.[0]?.providerId;
 
           if (!userProfileSnap.exists() && providerId === 'password') {
+            // Retry logic for new email signups if doc isn't immediately found
             console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} not initially found. Retrying after delay...`);
             await new Promise(resolve => setTimeout(resolve, 750)); 
             userProfileSnap = await getDoc(userDocRef);
@@ -158,8 +160,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           initialAuthResolvedRef.current = true;
       }
 
-      // Navigation logic should only run if not actively processing a signup/signin
-      // and initial auth resolution is complete.
       if (!isProcessingAuthRef.current && initialAuthResolvedRef.current) {
         const currentPath = window.location.pathname;
         if (appUser) {
@@ -172,7 +172,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 setTimeout(() => router.push(redirectPath), 0);
               }
           }
-        } else { // No appUser (logged out)
+        } else { 
             if (currentPath.startsWith('/patient') || currentPath.startsWith('/doctor')) {
                 setTimeout(() => router.push('/login'), 0);
             }
@@ -186,12 +186,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
+    await new Promise(resolve => setTimeout(resolve, 50)); // Brief delay for UI update
     try {
       await signInWithPopup(auth, googleProvider);
       // onAuthStateChanged will handle user state update and navigation
     } catch (error: any) {
       console.error("Google Sign-In error", error);
-      setUser(null); // Clear user on error
+      setUser(null); 
       throw error; 
     } finally {
       setIsProcessingAuth(false);
@@ -219,7 +220,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       await setDoc(userDocRef, userProfileData); 
-      setUser(userProfileData as User); // Update context immediately
+      
+      setUser(currentContextUser => { // Functional update to avoid stale closure issues if any
+        if (userProfileData && (!currentContextUser || currentContextUser.id !== userProfileData.id)) {
+           return userProfileData as User;
+        }
+        return currentContextUser;
+      });
 
       // Post-signup delay and navigation
       await new Promise(resolve => setTimeout(resolve, 2500)); 
@@ -241,6 +248,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithEmail = async (email: string, password: string) => {
     setIsProcessingAuth(true);
+    await new Promise(resolve => setTimeout(resolve, 50)); // Brief delay for UI update
     try {
       await signInWithEmailAndPassword(auth, email, password);
       // onAuthStateChanged will handle user state update and navigation
