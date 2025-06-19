@@ -65,14 +65,6 @@ export default function PatientDashboardPage() {
 
   return (
     <div className="space-y-8 pb-12">
-      <div>
-        <h1 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
-          Welcome, {user?.name || 'User'}!
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Ready to reflect? Log your mood and see your progress.
-        </p>
-      </div>
       <MoodLoggingForm userId={user.id} />
       {loadingEntries ? (
          <Skeleton className="h-80 sm:h-96 w-full rounded-lg" />
