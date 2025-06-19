@@ -18,11 +18,13 @@ import { LayoutDashboard, UserCircle, LogOut, UserPlus, LogInIcon, Link2, Menu }
 import {
   Sheet,
   SheetContent,
+  SheetHeader,
+  SheetTitle,
   SheetTrigger,
   SheetClose
 } from "@/components/ui/sheet";
 import React from 'react';
-import { Skeleton } from '@/components/ui/skeleton'; // Added this line
+import { Skeleton } from '@/components/ui/skeleton';
 
 
 const Navbar = () => {
@@ -129,11 +131,15 @@ const Navbar = () => {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[280px] p-4">
+              <SheetHeader className="mb-4">
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+                 <Link href="/" className="flex items-center space-x-2 self-start" onClick={() => document.getElementById('mobile-nav-close')?.click()}>
+                  <Logo className="text-primary h-7 w-7" />
+                  <span className="font-headline text-xl font-semibold text-primary">MindMirror</span>
+                </Link>
+              </SheetHeader>
               <div className="flex flex-col space-y-3">
-              <Link href="/" className="flex items-center space-x-2 mb-4 self-start" onClick={() => document.getElementById('mobile-nav-close')?.click()}>
-                <Logo className="text-primary h-7 w-7" />
-                <span className="font-headline text-xl font-semibold text-primary">MindMirror</span>
-              </Link>
+              
 
               {loading ? (
                 <div className="space-y-2">
