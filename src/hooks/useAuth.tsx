@@ -55,7 +55,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         const newUserData = { ...currentContextUser, ...updatedProfileData };
         
-        // Check if actual data changed to prevent unnecessary state updates
         let changed = false;
         if (currentContextUser.id !== newUserData.id ||
             currentContextUser.email !== newUserData.email ||
@@ -92,7 +91,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const providerId = firebaseUser.providerData?.[0]?.providerId;
 
           if (!userProfileSnap.exists() && providerId === 'password') {
-            // Retry logic for new email signups if doc isn't immediately found
             console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} not initially found. Retrying after delay...`);
             await new Promise(resolve => setTimeout(resolve, 750)); 
             userProfileSnap = await getDoc(userDocRef);
@@ -138,20 +136,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       setUser(currentContextUser => {
-        if (appUser) {
-          if (!currentContextUser ||
-              currentContextUser.id !== appUser.id ||
-              currentContextUser.email !== appUser.email ||
-              currentContextUser.name !== appUser.name ||
-              currentContextUser.role !== appUser.role ||
-              (appUser.role === 'patient' && (appUser as Patient).linkedDoctorCode !== (currentContextUser as Patient)?.linkedDoctorCode) ||
-              (appUser.role === 'doctor' && (appUser as Doctor).doctorCode !== (currentContextUser as Doctor)?.doctorCode)
+        if (appUser) { // If we have a valid appUser from Firebase/Firestore
+            // Check if the new appUser data is meaningfully different from the current context user
+            if (!currentContextUser ||
+                currentContextUser.id !== appUser.id ||
+                currentContextUser.email !== appUser.email ||
+                currentContextUser.name !== appUser.name ||
+                currentContextUser.role !== appUser.role ||
+                (appUser.role === 'patient' && (appUser as Patient).linkedDoctorCode !== (currentContextUser as Patient)?.linkedDoctorCode) ||
+                (appUser.role === 'doctor' && (appUser as Doctor).doctorCode !== (currentContextUser as Doctor)?.doctorCode)
             ) {
-            return appUser; // Only update if different
-          }
-          return currentContextUser; // No change
+                return appUser; // Update context if different
+            }
+            return currentContextUser; // No change needed, return existing user
         }
-        return null; // If appUser is null, set context user to null
+        // If appUser is null (e.g., after sign out or error)
+        if (currentContextUser !== null) { // Only update if current context user isn't already null
+            return null;
+        }
+        return currentContextUser; // No change needed (already null)
       });
 
 
@@ -159,7 +162,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setLoading(false);
           initialAuthResolvedRef.current = true;
       }
-
+      
       if (!isProcessingAuthRef.current && initialAuthResolvedRef.current) {
         const currentPath = window.location.pathname;
         if (appUser) {
@@ -182,14 +185,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, updateUserInContext]); 
+  }, [updateUserInContext]); 
 
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
-    await new Promise(resolve => setTimeout(resolve, 50)); // Brief delay for UI update
+    await new Promise(resolve => setTimeout(resolve, 50)); 
     try {
       await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged will handle user state update and navigation
     } catch (error: any) {
       console.error("Google Sign-In error", error);
       setUser(null); 
@@ -201,6 +203,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUpWithEmail = async (email: string, password: string, name: string, role: UserRole, doctorCode?: string) => {
     setIsProcessingAuth(true);
+    await new Promise(resolve => setTimeout(resolve, 50)); 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newAuthUser = userCredential.user;
@@ -221,15 +224,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       await setDoc(userDocRef, userProfileData); 
       
-      setUser(currentContextUser => { // Functional update to avoid stale closure issues if any
-        if (userProfileData && (!currentContextUser || currentContextUser.id !== userProfileData.id)) {
-           return userProfileData as User;
-        }
-        return currentContextUser;
-      });
+      setUser(userProfileData as User);
 
-      // Post-signup delay and navigation
-      await new Promise(resolve => setTimeout(resolve, 2500)); 
+      await new Promise(resolve => setTimeout(resolve, 500)); 
 
       if (userProfileData.role === 'patient') {
         router.push('/patient/dashboard');
@@ -248,10 +245,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithEmail = async (email: string, password: string) => {
     setIsProcessingAuth(true);
-    await new Promise(resolve => setTimeout(resolve, 50)); // Brief delay for UI update
+    await new Promise(resolve => setTimeout(resolve, 50)); 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle user state update and navigation
     } catch (error: any) {
       console.error("Email Sign-In error", error);
       setUser(null);
@@ -299,3 +295,5 @@ export const useAuth = (): AuthContextType => {
   return context;
 };
 
+    
+    
