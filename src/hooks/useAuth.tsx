@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
 
   const isProcessingAuthRef = useRef(isProcessingAuth);
-  const initialAuthResolvedRef = useRef(false);
+  const initialAuthResolvedRef = useRef(false); // Tracks if the *initial* onAuthStateChanged has run
 
   useEffect(() => {
     isProcessingAuthRef.current = isProcessingAuth;
@@ -56,8 +56,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const newUserData = { ...currentContextUser, ...updatedProfileData };
         
         let changed = false;
-        if (!currentContextUser ||
-            currentContextUser.id !== newUserData.id ||
+        if (currentContextUser.id !== newUserData.id ||
             currentContextUser.email !== newUserData.email ||
             currentContextUser.name !== newUserData.name ||
             currentContextUser.role !== newUserData.role) {
@@ -77,11 +76,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUserType | null) => {
-      if (isProcessingAuthRef.current) { 
-        return;
-      }
-
       let needsInitialLoadingUpdate = !initialAuthResolvedRef.current;
+
       if (needsInitialLoadingUpdate) {
           setLoading(true); 
       }
@@ -102,7 +98,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               console.log(`onAuthStateChanged: Doc for email user ${firebaseUser.uid} found after delay.`);
             }
           }
-
+          
           if (userProfileSnap.exists()) {
             const profileData = userProfileSnap.data() as any; 
             appUser = {
@@ -124,7 +120,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               appUser = newUserFirestoreData;
             } else if (providerId === 'password') {
               console.error(`CRITICAL: Firestore document for email user ${firebaseUser.uid} is missing. This should have been created during signup. User will be signed out.`);
-              await signOut(auth);
+              await signOut(auth); 
               appUser = null; 
             } else {
               console.warn(`User ${firebaseUser.uid} authenticated with unhandled provider ${providerId}. Firestore document missing. Signing out.`);
@@ -141,21 +137,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       setUser(currentContextUser => {
         if (appUser) {
-          let changed = false;
           if (!currentContextUser ||
               currentContextUser.id !== appUser.id ||
               currentContextUser.email !== appUser.email ||
               currentContextUser.name !== appUser.name ||
-              currentContextUser.role !== appUser.role) {
-            changed = true;
-          } else if (appUser.role === 'patient' && (appUser as Patient).linkedDoctorCode !== (currentContextUser as Patient)?.linkedDoctorCode) {
-            changed = true;
-          } else if (appUser.role === 'doctor' && (appUser as Doctor).doctorCode !== (currentContextUser as Doctor)?.doctorCode) {
-            changed = true;
+              currentContextUser.role !== appUser.role ||
+              (appUser.role === 'patient' && (appUser as Patient).linkedDoctorCode !== (currentContextUser as Patient)?.linkedDoctorCode) ||
+              (appUser.role === 'doctor' && (appUser as Doctor).doctorCode !== (currentContextUser as Doctor)?.doctorCode)
+            ) {
+            return appUser; // Only update if different
           }
-          return changed ? appUser : currentContextUser;
+          return currentContextUser; // No change
         }
-        return currentContextUser === null ? currentContextUser : null;
+        return null; // If appUser is null, set context user to null
       });
 
 
@@ -164,32 +158,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           initialAuthResolvedRef.current = true;
       }
 
-      const currentPath = window.location.pathname;
-      if (!isProcessingAuthRef.current && appUser) {
-        if (currentPath === '/login' || currentPath === '/signup' || currentPath === '/') {
-            if (appUser.role === 'patient') {
-                setTimeout(() => router.push('/patient/dashboard'), 0);
-            } else if (appUser.role === 'doctor') {
-                setTimeout(() => router.push('/doctor/dashboard'), 0);
+      // Navigation logic should only run if not actively processing a signup/signin
+      // and initial auth resolution is complete.
+      if (!isProcessingAuthRef.current && initialAuthResolvedRef.current) {
+        const currentPath = window.location.pathname;
+        if (appUser) {
+          if (currentPath === '/login' || currentPath === '/signup' || currentPath === '/') {
+              let redirectPath = '/';
+              if (appUser.role === 'patient') redirectPath = '/patient/dashboard';
+              else if (appUser.role === 'doctor') redirectPath = '/doctor/dashboard';
+              
+              if (redirectPath !== '/') {
+                setTimeout(() => router.push(redirectPath), 0);
+              }
+          }
+        } else { // No appUser (logged out)
+            if (currentPath.startsWith('/patient') || currentPath.startsWith('/doctor')) {
+                setTimeout(() => router.push('/login'), 0);
             }
         }
-      } else if (!isProcessingAuthRef.current && !appUser) {
-          if (currentPath.startsWith('/patient') || currentPath.startsWith('/doctor')) {
-              setTimeout(() => router.push('/login'), 0);
-          }
       }
     });
 
     return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, updateUserInContext]); 
 
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
     try {
       await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged will handle user state update and navigation
     } catch (error: any) {
       console.error("Google Sign-In error", error);
-      setUser(null); 
+      setUser(null); // Clear user on error
       throw error; 
     } finally {
       setIsProcessingAuth(false);
@@ -217,10 +219,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       await setDoc(userDocRef, userProfileData); 
-      setUser(userProfileData as User);
+      setUser(userProfileData as User); // Update context immediately
 
       // Post-signup delay and navigation
-      await new Promise(resolve => setTimeout(resolve, 2500)); // 2.5 second delay
+      await new Promise(resolve => setTimeout(resolve, 2500)); 
 
       if (userProfileData.role === 'patient') {
         router.push('/patient/dashboard');
@@ -241,6 +243,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsProcessingAuth(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged will handle user state update and navigation
     } catch (error: any) {
       console.error("Email Sign-In error", error);
       setUser(null);
@@ -267,7 +270,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     <AuthContext.Provider value={{ 
       user, 
       loading, 
-      isAuthenticated: !!user && !loading && !isProcessingAuth, 
+      isAuthenticated: !!user && initialAuthResolvedRef.current, 
       isProcessingAuth,
       signInWithGoogle,
       signUpWithEmail,
