@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "mindmirror-133f1"
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}
