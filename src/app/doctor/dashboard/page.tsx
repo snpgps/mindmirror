@@ -112,7 +112,8 @@ export default function DoctorDashboardPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-[minmax(280px,_1fr)_3fr] gap-6 items-start">
-          <div className="sticky top-20 self-start">
+          {/* Updated this div to be sticky only on md screens and above */}
+          <div className="md:sticky md:top-20 md:self-start">
             <PatientList 
               patients={patients} 
               onSelectPatient={setSelectedPatient}
