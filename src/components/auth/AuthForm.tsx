@@ -72,7 +72,7 @@ const generateDoctorCode = () => {
 export function AuthForm({ mode }: AuthFormProps) {
   const { signInWithGoogle, signUpWithEmail, signInWithEmail, isProcessingAuth } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
-  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+  // const [isSubmittingForm, setIsSubmittingForm] = useState(false); // Removed: use isProcessingAuth from hook
   const { toast } = useToast();
 
   const currentSchema = mode === "signup" ? signupSchema : formSchemaBase;
@@ -91,11 +91,11 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   useEffect(() => {
     if (mode === "signup" && watchedRole === "doctor") {
-      if (!form.getValues("doctorCode")) { // Only set if not already set (e.g., by user interaction)
+      if (!form.getValues("doctorCode")) { 
         form.setValue("doctorCode" as any, generateDoctorCode());
       }
     } else if (mode === "signup" && watchedRole !== "doctor") {
-      form.setValue("doctorCode" as any, ""); // Clear if role is not doctor
+      form.setValue("doctorCode" as any, ""); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedRole, mode, form.setValue, form.getValues]);
@@ -107,13 +107,12 @@ export function AuthForm({ mode }: AuthFormProps) {
   };
 
   async function onSubmit(values: CurrentFormValues) {
-    setIsSubmittingForm(true);
+    // setIsSubmittingForm(true); // Removed
     try {
       if (mode === "login") {
         await signInWithEmail(values.email, values.password);
       } else if (mode === "signup") {
         const signupValues = values as z.infer<typeof signupSchema>;
-        // Ensure doctorCode is explicitly passed, even if optional in base type for Zod
         await signUpWithEmail(signupValues.email, signupValues.password, signupValues.name, signupValues.role, signupValues.doctorCode);
       }
     } catch (error: any) {
@@ -122,9 +121,10 @@ export function AuthForm({ mode }: AuthFormProps) {
         title: `${mode === "login" ? "Login" : "Sign Up"} Failed`,
         description: error.message || "An unexpected error occurred.",
       });
-    } finally {
-      setIsSubmittingForm(false);
-    }
+    } 
+    // finally { // Removed setIsSubmittingForm(false)
+      // setIsSubmittingForm(false); 
+    // }
   }
 
   const handleGoogleSignIn = async () => {
@@ -268,8 +268,8 @@ export function AuthForm({ mode }: AuthFormProps) {
                 )}
               </>
             )}
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmittingForm || isProcessingAuth}>
-              {isSubmittingForm ? "Processing..." : (mode === "login" ? "Log In" : "Sign Up")}
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isProcessingAuth}>
+              {isProcessingAuth ? "Processing..." : (mode === "login" ? "Log In" : "Sign Up")}
             </Button>
           </form>
         </Form>
@@ -278,7 +278,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           <span className="px-4 text-xs text-muted-foreground">OR</span>
           <Separator className="flex-1" />
         </div>
-        <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isProcessingAuth || isSubmittingForm}>
+        <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isProcessingAuth}>
           <GoogleIcon />
           <span className="ml-2">Sign {mode === "login" ? "in" : "up"} with Google</span>
         </Button>
