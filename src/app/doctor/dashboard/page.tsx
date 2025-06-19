@@ -77,7 +77,7 @@ export default function DoctorDashboardPage() {
   return (
     <div className="space-y-6">
        <div className="mb-6">
-        <h1 className="font-headline text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
+        <h1 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
           Doctor Dashboard
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -86,22 +86,22 @@ export default function DoctorDashboardPage() {
       </div>
       
       {loadingData ? (
-         <div className="grid md:grid-cols-[minmax(300px,_350px)_1fr] gap-6 h-full">
+         <div className="grid md:grid-cols-[minmax(280px,_1fr)_3fr] gap-6 h-full">
           <Skeleton className="h-[calc(100vh-12rem)] w-full rounded-lg" />
           <Skeleton className="h-[calc(100vh-12rem)] w-full rounded-lg" />
         </div>
       ) : patients.length === 0 ? (
         <Card className="shadow-lg mt-8">
-          <CardContent className="text-center py-16">
-            <Users className="mx-auto h-20 w-20 text-primary/70 mb-8" />
-            <h2 className="text-2xl font-semibold text-foreground mb-3">No Patients Linked Yet</h2>
-            <p className="text-md text-muted-foreground max-w-md mx-auto">
+          <CardContent className="text-center py-10 sm:py-16">
+            <Users className="mx-auto h-16 w-16 sm:h-20 sm:w-20 text-primary/70 mb-8" />
+            <h2 className="text-xl sm:text-2xl font-semibold text-foreground mb-3">No Patients Linked Yet</h2>
+            <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
               It looks like you don&apos;t have any patients connected to your MindMirror account. 
               To start viewing their mood logs, please ask them to enter your Doctor Code in their app.
             </p>
             <p className="text-muted-foreground mt-6 mb-2">Your unique Doctor Code to share is:</p>
-            <div className="inline-block bg-primary/10 border border-primary/30 rounded-lg px-6 py-3">
-                <p className="text-3xl font-bold text-primary tracking-wider">
+            <div className="inline-block bg-primary/10 border border-primary/30 rounded-lg px-4 py-2 sm:px-6 sm:py-3">
+                <p className="text-2xl sm:text-3xl font-bold text-primary tracking-wider">
                 {doctorCode || 'N/A'}
                 </p>
             </div>
@@ -111,7 +111,7 @@ export default function DoctorDashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(300px,_350px)_1fr] gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(280px,_1fr)_3fr] gap-6 items-start">
           <div className="sticky top-20 self-start">
             <PatientList 
               patients={patients} 
@@ -119,7 +119,7 @@ export default function DoctorDashboardPage() {
               selectedPatientId={selectedPatient?.id}
             />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0"> {/* Added min-w-0 to prevent overflow issues in flex/grid children */}
             <PatientDataView patient={selectedPatient} />
           </div>
         </div>

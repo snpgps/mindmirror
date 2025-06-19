@@ -11,19 +11,16 @@ export default function HomePage() {
       <Navbar />
       <main className="flex-1 flex flex-col"> {/* Ensure main is a flex column that grows */}
         {/* Hero Section */}
-        {/* This section will now expand (flex-1) and center its content vertically and horizontally */}
         <section className="w-full flex flex-1 items-center justify-center py-12 px-4 md:px-6">
-          {/* The container class adds mx-auto for horizontal centering and max-width.
-              The parent section's items-center and justify-center will act on this container. */}
           <div className="container mx-auto">
             <div className="flex flex-col items-center justify-center space-y-6 text-center">
-              <h1 className="font-headline text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
+              <h1 className="font-headline text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
                 Understand Your Mind, Improve Your Life with <span className="text-primary">MindMirror</span>
               </h1>
-              <p className="max-w-[700px] text-muted-foreground md:text-xl">
+              <p className="max-w-[700px] text-muted-foreground text-base sm:text-lg md:text-xl">
                 Log your moods, track activities, and gain valuable insights into your mental well-being. Securely share your progress with your doctor.
               </p>
-              <div className="flex flex-col gap-3 min-[400px]:flex-row">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg transition-transform hover:scale-105">
                   <Link href="/signup">Get Started for Free</Link>
                 </Button>
@@ -40,14 +37,14 @@ export default function HomePage() {
           <div className="container mx-auto px-4 md:px-6">
             <div className="flex flex-col items-center justify-center space-y-4 text-center mb-12">
               <div className="inline-block rounded-lg bg-muted px-3 py-1 text-sm font-medium text-primary">Core Benefits</div>
-              <h2 className="font-headline text-3xl font-bold tracking-tight sm:text-4xl">
+              <h2 className="font-headline text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
                 Nurture Your Mental Wellness
               </h2>
-              <p className="max-w-[700px] text-muted-foreground md:text-lg">
+              <p className="max-w-[700px] text-muted-foreground text-sm sm:text-base md:text-lg">
                 MindMirror provides intuitive tools to help you on your journey to a healthier mind.
               </p>
             </div>
-            <div className="mx-auto grid max-w-5xl items-stretch gap-8 sm:grid-cols-1 md:grid-cols-3">
+            <div className="mx-auto grid max-w-5xl items-stretch gap-6 sm:gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
               <div className="flex flex-col items-center text-center p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 bg-card transform hover:-translate-y-1">
                 <Brain className="h-12 w-12 text-primary mb-4" />
                 <h3 className="text-xl font-bold mb-2 font-headline">Easy Mood Logging</h3>
@@ -78,10 +75,10 @@ export default function HomePage() {
           <div className="container mx-auto grid items-center justify-center gap-4 px-4 md:px-6 text-center">
             <div className="space-y-4">
               <Lightbulb className="h-16 w-16 text-primary mx-auto" />
-              <h2 className="font-headline text-3xl font-bold tracking-tight md:text-4xl">
+              <h2 className="font-headline text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
                 Ready to Start Your Journey?
               </h2>
-              <p className="mx-auto max-w-[600px] text-muted-foreground md:text-lg">
+              <p className="mx-auto max-w-[600px] text-muted-foreground text-sm sm:text-base md:text-lg">
                 Take the first step towards a better understanding of your mental well-being.
               </p>
             </div>

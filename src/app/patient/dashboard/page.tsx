@@ -57,8 +57,8 @@ export default function PatientDashboardPage() {
   if (authLoading || !user) {
      return (
         <div className="space-y-8">
-          <Skeleton className="h-[70vh] w-full rounded-lg" />
-          <Skeleton className="h-64 w-full rounded-lg" />
+          <Skeleton className="h-[60vh] sm:h-[70vh] w-full rounded-lg" />
+          <Skeleton className="h-56 sm:h-64 w-full rounded-lg" />
         </div>
       );
   }
@@ -66,7 +66,7 @@ export default function PatientDashboardPage() {
   return (
     <div className="space-y-8 pb-12">
       <div>
-        <h1 className="font-headline text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
+        <h1 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
           Welcome, {user?.name || 'User'}!
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -75,7 +75,7 @@ export default function PatientDashboardPage() {
       </div>
       <MoodLoggingForm userId={user.id} />
       {loadingEntries ? (
-         <Skeleton className="h-96 w-full rounded-lg" />
+         <Skeleton className="h-80 sm:h-96 w-full rounded-lg" />
       ) : (
         <MoodTimeline entries={moodEntries} />
       )}

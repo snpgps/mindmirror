@@ -162,7 +162,7 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
   return (
     <Card className="w-full shadow-lg">
       <CardHeader>
-        <CardTitle className="font-headline text-2xl">How are you feeling?</CardTitle>
+        <CardTitle className="font-headline text-xl sm:text-2xl">How are you feeling?</CardTitle>
         <CardDescription>Select your core emotion, then refine with more specific feelings.</CardDescription>
       </CardHeader>
       <CardContent>
@@ -171,21 +171,21 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
             {/* Core Emotion Selection */}
             <FormItem>
               <FormLabel className="text-lg font-semibold">Core Emotion</FormLabel>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 mt-2">
                 {coreEmotions.map(([key, { name, colorClass }]) => (
                   <Button
                     key={key}
                     type="button"
                     variant="outline"
                     className={cn(
-                      "justify-start p-4 h-auto text-left transition-all duration-150 ease-in-out",
+                      "justify-start p-3 sm:p-4 h-auto text-left transition-all duration-150 ease-in-out",
                       selectedCoreEmotionKey === key ? `${colorClass} ring-2 ring-offset-2 ring-current` : "border-border hover:bg-muted/50",
                       selectedCoreEmotionKey === key ? "shadow-md scale-105" : "hover:shadow-sm"
                     )}
                     onClick={() => handleCoreEmotionSelect(key)}
                   >
                      {selectedCoreEmotionKey === key ? <CheckCircle className="mr-2 h-5 w-5" /> : <Circle className="mr-2 h-5 w-5 text-muted-foreground/50" />}
-                    <span className="font-medium">{name}</span>
+                    <span className="font-medium text-sm sm:text-base">{name}</span>
                   </Button>
                 ))}
               </div>
@@ -199,7 +199,7 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
                 render={() => (
                   <FormItem>
                     <FormLabel className="text-lg font-semibold">Feeling more specifically...</FormLabel>
-                     <ScrollArea className="h-48 rounded-md border p-4">
+                     <ScrollArea className="h-40 sm:h-48 rounded-md border p-3 sm:p-4">
                       <div className="space-y-2">
                         {Object.entries(EMOTION_HIERARCHY[selectedCoreEmotionKey].primaryEmotions).map(([pkey, pdata]) => (
                            <div key={pkey} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/30 transition-colors">
@@ -229,7 +229,7 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
                 render={() => (
                   <FormItem>
                     <FormLabel className="text-lg font-semibold">Any of these too?</FormLabel>
-                    <ScrollArea className="h-48 rounded-md border p-4">
+                    <ScrollArea className="h-40 sm:h-48 rounded-md border p-3 sm:p-4">
                       <div className="space-y-2">
                         {currentPrimaryEmotions.map(pkey => {
                           const primaryData = EMOTION_HIERARCHY[selectedCoreEmotionKey]?.primaryEmotions[pkey];
@@ -268,7 +268,7 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
               name="activities"
               render={() => (
                 <FormItem>
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
                     <FormLabel className="text-lg font-semibold">Activities Today</FormLabel>
                     <Dialog>
                       <DialogTrigger asChild>
@@ -276,7 +276,7 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
                           <PlusCircle className="mr-2 h-4 w-4" /> Add Custom
                         </Button>
                       </DialogTrigger>
-                      <DialogContent>
+                      <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                           <DialogTitle>Add Custom Activity</DialogTitle>
                         </DialogHeader>
@@ -285,17 +285,17 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
                           value={newActivityName}
                           onChange={(e) => setNewActivityName(e.target.value)}
                         />
-                        <DialogFooter>
+                        <DialogFooter className="sm:justify-start">
+                           <Button type="button" onClick={handleAddCustomActivity}>Add Activity</Button>
                           <DialogClose asChild>
                             <Button type="button" variant="ghost" id="dialog-close-button">Cancel</Button>
                           </DialogClose>
-                          <Button type="button" onClick={handleAddCustomActivity}>Add Activity</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
                   </div>
-                  <ScrollArea className="h-40 rounded-md border p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  <ScrollArea className="h-40 rounded-md border p-3 sm:p-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-2">
                     {allActivities.map((activity) => (
                       <FormField
                         key={activity.id}
@@ -355,7 +355,7 @@ export function MoodLoggingForm({ userId }: MoodLoggingFormProps) {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full text-lg py-6 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting}>
+            <Button type="submit" className="w-full text-base sm:text-lg py-3 sm:py-6 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting}>
                {form.formState.isSubmitting ? "Saving..." : <> <Send className="mr-2 h-5 w-5" /> Log My Mood </>}
             </Button>
           </form>

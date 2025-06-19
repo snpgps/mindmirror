@@ -137,7 +137,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   return (
     <Card className="w-full max-w-md shadow-xl">
       <CardHeader>
-        <CardTitle className="font-headline text-2xl">{mode === "login" ? "Welcome Back" : "Create an Account"}</CardTitle>
+        <CardTitle className="font-headline text-xl sm:text-2xl">{mode === "login" ? "Welcome Back" : "Create an Account"}</CardTitle>
         <CardDescription>
           {mode === "login" ? "Log in to access your MindMirror dashboard." : "Sign up to start your mental wellness journey."}
         </CardDescription>
@@ -281,5 +281,3 @@ export function AuthForm({ mode }: AuthFormProps) {
     </Card>
   );
 }
-
-    
