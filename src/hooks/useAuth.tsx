@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (needsInitialLoadingUpdate) {
           setLoading(true); 
       }
-
+      
       let appUser: User | null = null;
 
       if (firebaseUser) {
@@ -136,8 +136,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       setUser(currentContextUser => {
-        if (appUser) { // If we have a valid appUser from Firebase/Firestore
-            // Check if the new appUser data is meaningfully different from the current context user
+        if (appUser) { 
             if (!currentContextUser ||
                 currentContextUser.id !== appUser.id ||
                 currentContextUser.email !== appUser.email ||
@@ -146,15 +145,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 (appUser.role === 'patient' && (appUser as Patient).linkedDoctorCode !== (currentContextUser as Patient)?.linkedDoctorCode) ||
                 (appUser.role === 'doctor' && (appUser as Doctor).doctorCode !== (currentContextUser as Doctor)?.doctorCode)
             ) {
-                return appUser; // Update context if different
+                return appUser; 
             }
-            return currentContextUser; // No change needed, return existing user
+            return currentContextUser; 
         }
-        // If appUser is null (e.g., after sign out or error)
-        if (currentContextUser !== null) { // Only update if current context user isn't already null
+        if (currentContextUser !== null) { 
             return null;
         }
-        return currentContextUser; // No change needed (already null)
+        return currentContextUser; 
       });
 
 
@@ -189,7 +187,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
-    await new Promise(resolve => setTimeout(resolve, 50)); 
+    await new Promise(resolve => setTimeout(resolve, 100)); 
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
@@ -203,7 +201,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUpWithEmail = async (email: string, password: string, name: string, role: UserRole, doctorCode?: string) => {
     setIsProcessingAuth(true);
-    await new Promise(resolve => setTimeout(resolve, 50)); 
+    await new Promise(resolve => setTimeout(resolve, 100)); 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newAuthUser = userCredential.user;
@@ -245,7 +243,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithEmail = async (email: string, password: string) => {
     setIsProcessingAuth(true);
-    await new Promise(resolve => setTimeout(resolve, 50)); 
+    await new Promise(resolve => setTimeout(resolve, 100)); 
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
@@ -294,6 +292,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
-    
-    
