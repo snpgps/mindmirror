@@ -72,7 +72,6 @@ const generateDoctorCode = () => {
 export function AuthForm({ mode }: AuthFormProps) {
   const { signInWithGoogle, signUpWithEmail, signInWithEmail, isProcessingAuth } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
-  // const [isSubmittingForm, setIsSubmittingForm] = useState(false); // Removed: use isProcessingAuth from hook
   const { toast } = useToast();
 
   const currentSchema = mode === "signup" ? signupSchema : formSchemaBase;
@@ -107,7 +106,6 @@ export function AuthForm({ mode }: AuthFormProps) {
   };
 
   async function onSubmit(values: CurrentFormValues) {
-    // setIsSubmittingForm(true); // Removed
     try {
       if (mode === "login") {
         await signInWithEmail(values.email, values.password);
@@ -122,9 +120,6 @@ export function AuthForm({ mode }: AuthFormProps) {
         description: error.message || "An unexpected error occurred.",
       });
     } 
-    // finally { // Removed setIsSubmittingForm(false)
-      // setIsSubmittingForm(false); 
-    // }
   }
 
   const handleGoogleSignIn = async () => {
@@ -286,3 +281,5 @@ export function AuthForm({ mode }: AuthFormProps) {
     </Card>
   );
 }
+
+    
