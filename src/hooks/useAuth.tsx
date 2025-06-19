@@ -187,9 +187,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithGoogle = async () => {
     setIsProcessingAuth(true);
-    await new Promise(resolve => setTimeout(resolve, 100)); 
     try {
       await signInWithPopup(auth, googleProvider);
+      // Navigation is handled by onAuthStateChanged
     } catch (error: any) {
       console.error("Google Sign-In error", error);
       setUser(null); 
@@ -201,7 +201,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUpWithEmail = async (email: string, password: string, name: string, role: UserRole, doctorCode?: string) => {
     setIsProcessingAuth(true);
-    await new Promise(resolve => setTimeout(resolve, 100)); 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newAuthUser = userCredential.user;
@@ -222,10 +221,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       await setDoc(userDocRef, userProfileData); 
       
-      setUser(userProfileData as User);
+      setUser(userProfileData as User); // Update context immediately
 
-      await new Promise(resolve => setTimeout(resolve, 500)); 
-
+      // Direct navigation after successful signup and state update
       if (userProfileData.role === 'patient') {
         router.push('/patient/dashboard');
       } else if (userProfileData.role === 'doctor') {
@@ -243,9 +241,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithEmail = async (email: string, password: string) => {
     setIsProcessingAuth(true);
-    await new Promise(resolve => setTimeout(resolve, 100)); 
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      // Navigation is handled by onAuthStateChanged
     } catch (error: any) {
       console.error("Email Sign-In error", error);
       setUser(null);
@@ -292,3 +290,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
