@@ -1,11 +1,47 @@
 
+"use client";
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/shared/Navbar';
 import { CheckCircle, BarChart3, Users, ShieldCheck, Brain, TrendingUp, Lightbulb } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { FullScreenLoader } from '@/components/shared/FullScreenLoader';
 
 export default function HomePage() {
+  const { user, loading, isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) {
+      return; // Don't do anything while auth state is loading
+    }
+
+    if (isAuthenticated && user) {
+      if (user.role === 'patient') {
+        router.push('/patient/dashboard');
+      } else if (user.role === 'doctor') {
+        router.push('/doctor/dashboard');
+      }
+    }
+  }, [user, loading, isAuthenticated, router]);
+
+  // If auth is loading, or if user is authenticated (and thus will be redirected), show loader.
+  if (loading || (isAuthenticated && user)) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Navbar /> {/* Keep Navbar visible for consistency during loading/redirect */}
+        <main className="flex-1">
+          <FullScreenLoader />
+        </main>
+      </div>
+    );
+  }
+
+  // Render home page content only if not loading and user is not authenticated
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-primary/5 via-background to-accent/5">
       <Navbar />
