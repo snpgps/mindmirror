@@ -32,7 +32,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true); // For initial auth resolution
+  const [loading, setLoading] = useState(true); 
   const [isProcessingAuth, setIsProcessingAuth] = useState(false);
   const router = useRouter();
 
@@ -55,14 +55,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         const newUserData = { ...currentContextUser, ...updatedProfileData };
         
-        // Deep comparison for relevant fields to decide if update is needed
         let changed = false;
-        if (currentContextUser.name !== newUserData.name || currentContextUser.email !== newUserData.email || currentContextUser.role !== newUserData.role) {
-            changed = true;
+        if (!currentContextUser ||
+            currentContextUser.id !== newUserData.id ||
+            currentContextUser.email !== newUserData.email ||
+            currentContextUser.name !== newUserData.name ||
+            currentContextUser.role !== newUserData.role) {
+          changed = true;
         } else if (newUserData.role === 'patient' && (newUserData as Patient).linkedDoctorCode !== (currentContextUser as Patient)?.linkedDoctorCode) {
-            changed = true;
+          changed = true;
         } else if (newUserData.role === 'doctor' && (newUserData as Doctor).doctorCode !== (currentContextUser as Doctor)?.doctorCode) {
-            changed = true;
+          changed = true;
         }
 
         return changed ? newUserData : currentContextUser;
@@ -136,28 +139,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
       
-      setUser(prevUser => {
-        if (appUser) { 
+      setUser(currentContextUser => {
+        if (appUser) {
           let changed = false;
-          if (!prevUser) {
+          if (!currentContextUser ||
+              currentContextUser.id !== appUser.id ||
+              currentContextUser.email !== appUser.email ||
+              currentContextUser.name !== appUser.name ||
+              currentContextUser.role !== appUser.role) {
             changed = true;
-          } else {
-            if (prevUser.id !== appUser.id ||
-                prevUser.email !== appUser.email ||
-                prevUser.name !== appUser.name ||
-                prevUser.role !== appUser.role) {
-              changed = true;
-            } else if (appUser.role === 'patient' && (appUser as Patient).linkedDoctorCode !== (prevUser as Patient)?.linkedDoctorCode) {
-              changed = true;
-            } else if (appUser.role === 'doctor' && (appUser as Doctor).doctorCode !== (prevUser as Doctor)?.doctorCode) {
-              changed = true;
-            }
+          } else if (appUser.role === 'patient' && (appUser as Patient).linkedDoctorCode !== (currentContextUser as Patient)?.linkedDoctorCode) {
+            changed = true;
+          } else if (appUser.role === 'doctor' && (appUser as Doctor).doctorCode !== (currentContextUser as Doctor)?.doctorCode) {
+            changed = true;
           }
-          return changed ? appUser : prevUser;
-        } else { 
-          return prevUser ? null : prevUser; 
+          return changed ? appUser : currentContextUser;
         }
+        return currentContextUser === null ? currentContextUser : null;
       });
+
 
       if (needsInitialLoadingUpdate) {
           setLoading(false);
@@ -165,15 +165,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const currentPath = window.location.pathname;
-      if (appUser) { 
-          if (currentPath === '/login' || currentPath === '/signup' || currentPath === '/') {
-              if (appUser.role === 'patient') {
-                  setTimeout(() => router.push('/patient/dashboard'), 0);
-              } else if (appUser.role === 'doctor') {
-                  setTimeout(() => router.push('/doctor/dashboard'), 0);
-              }
-          }
-      } else { 
+      if (!isProcessingAuthRef.current && appUser) {
+        if (currentPath === '/login' || currentPath === '/signup' || currentPath === '/') {
+            if (appUser.role === 'patient') {
+                setTimeout(() => router.push('/patient/dashboard'), 0);
+            } else if (appUser.role === 'doctor') {
+                setTimeout(() => router.push('/doctor/dashboard'), 0);
+            }
+        }
+      } else if (!isProcessingAuthRef.current && !appUser) {
           if (currentPath.startsWith('/patient') || currentPath.startsWith('/doctor')) {
               setTimeout(() => router.push('/login'), 0);
           }
@@ -181,7 +181,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     return () => unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, updateUserInContext]); 
 
   const signInWithGoogle = async () => {
@@ -218,7 +217,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       await setDoc(userDocRef, userProfileData); 
-      setUser(userProfileData as User); 
+      setUser(userProfileData as User);
+
+      // Post-signup delay and navigation
+      await new Promise(resolve => setTimeout(resolve, 2500)); // 2.5 second delay
+
+      if (userProfileData.role === 'patient') {
+        router.push('/patient/dashboard');
+      } else if (userProfileData.role === 'doctor') {
+        router.push('/doctor/dashboard');
+      }
+
     } catch (error: any) {
       console.error("Email Sign-Up error:", error);
       setUser(null); 
