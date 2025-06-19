@@ -5,16 +5,19 @@ import type { Patient, MoodEntry } from '@/lib/types';
 import { MoodTimeline } from '@/components/patient/MoodTimeline'; // Re-use timeline component
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { User, Mail, CalendarClock, FileText } from 'lucide-react';
+import { User, Mail, CalendarClock, FileText, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button'; // Added Button
 
 interface PatientDataViewProps {
   patient: Patient | null;
+  onBack?: () => void; // Optional: for mobile view to go back to list
+  isMobileView?: boolean; // Optional: to indicate if in mobile specific view
 }
 
-export function PatientDataView({ patient }: PatientDataViewProps) {
+export function PatientDataView({ patient, onBack, isMobileView = false }: PatientDataViewProps) {
   const [patientEntries, setPatientEntries] = useState<MoodEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -32,7 +35,7 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
           fetchedEntries.push({
             id: doc.id,
             userId: data.userId,
-            moodWords: data.moodWords || [], // Ensure moodWords is an array
+            moodWords: data.moodWords || [],
             activities: data.activities,
             notes: data.notes,
             timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
@@ -51,14 +54,15 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
         setLoading(false);
       });
 
-      return () => unsubscribe(); // Cleanup listener
+      return () => unsubscribe();
     } else {
-      setPatientEntries([]); // Clear entries if no patient is selected
+      setPatientEntries([]);
       setLoading(false);
     }
   }, [patient, toast]);
 
-  if (!patient) {
+  // This state is for when the component is rendered but no patient is selected (primarily for desktop)
+  if (!patient && !isMobileView) { // Only show this placeholder on desktop if no patient selected. Mobile view handles this differently.
     return (
       <Card className="shadow-lg h-full flex flex-col items-center justify-center min-h-[300px]">
         <CardContent className="text-center py-10 sm:py-12 px-4">
@@ -70,22 +74,44 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
     );
   }
 
-  if (loading) {
+  // If a patient IS selected (or if it's mobile view, patient will be selected by now) but data is loading
+  if (loading && patient) {
      return (
-      <Card className="shadow-lg">
-        <CardHeader>
-          <Skeleton className="h-7 sm:h-8 w-3/4 rounded" />
-          <Skeleton className="h-4 w-1/2 rounded mt-2" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-56 sm:h-64 w-full rounded" />
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        {isMobileView && onBack && (
+          <Button variant="ghost" onClick={onBack} className="mb-2 -ml-2 sm:mb-4 flex items-center self-start">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Patient List
+          </Button>
+        )}
+        <Card className="shadow-lg">
+          <CardHeader>
+            <Skeleton className="h-7 sm:h-8 w-3/4 rounded" />
+            <Skeleton className="h-4 w-1/2 rounded mt-2" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-56 sm:h-64 w-full rounded" />
+          </CardContent>
+        </Card>
+      </div>
     );
   }
+  
+  // If patient is null AND it's mobile view, this component shouldn't be rendered by the parent anyway.
+  // But as a fallback or if directly rendered:
+  if (!patient) {
+    return null; // Or some other placeholder if this case is reachable
+  }
+
 
   return (
     <div className="space-y-6">
+      {isMobileView && onBack && (
+        <Button variant="ghost" onClick={onBack} className="mb-2 -ml-2 sm:mb-4 flex items-center self-start">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Patient List
+        </Button>
+      )}
       <Card className="shadow-md">
         <CardHeader>
           <CardTitle className="font-headline text-xl sm:text-2xl flex items-center">
@@ -99,7 +125,7 @@ export function PatientDataView({ patient }: PatientDataViewProps) {
         </CardHeader>
       </Card>
 
-      <h2 className="font-headline text-lg sm:text-xl font-semibold mt-6 mb-3">Mood Timeline</h2>
+      <h2 className="font-headline text-lg sm:text-xl font-semibold mt-4 sm:mt-6 mb-3">Mood Timeline</h2>
       {patientEntries.length > 0 ? (
         <MoodTimeline entries={patientEntries} />
       ) : (

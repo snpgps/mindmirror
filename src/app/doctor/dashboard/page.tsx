@@ -1,16 +1,16 @@
 
 "use client";
 import { useState, useEffect, useMemo } from 'react';
-import type { Patient, User, Doctor } from '@/lib/types'; // Added Doctor type
+import type { Patient } from '@/lib/types'; // Doctor type already imported
 import { PatientList } from '@/components/doctor/PatientList';
 import { PatientDataView } from '@/components/doctor/PatientDataView';
 import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, onSnapshot, DocumentData } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, DocumentData } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent } from '@/components/ui/card'; // Added Card, CardContent
-import { Users } from 'lucide-react'; // Added Users icon
+import { Card, CardContent } from '@/components/ui/card';
+import { Users } from 'lucide-react';
 
 export default function DoctorDashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -19,7 +19,7 @@ export default function DoctorDashboardPage() {
   const [loadingData, setLoadingData] = useState(true);
   const { toast } = useToast();
 
-  const doctorCode = useMemo(() => (user?.role === 'doctor' ? (user as Doctor).doctorCode : undefined), [user]);
+  const doctorCode = useMemo(() => (user?.role === 'doctor' ? (user as any).doctorCode : undefined), [user]);
 
   useEffect(() => {
     if (doctorCode && !authLoading) {
@@ -61,11 +61,15 @@ export default function DoctorDashboardPage() {
     }
   }, [doctorCode, authLoading, toast]);
 
+  const handleBackToList = () => {
+    setSelectedPatient(null);
+  };
+
   if (authLoading || !user) {
     return (
       <div className="grid md:grid-cols-[300px_1fr] gap-6 h-full">
         <Skeleton className="h-[calc(100vh-8rem)] w-full rounded-lg" />
-        <Skeleton className="h-[calc(100vh-8rem)] w-full rounded-lg" />
+        <Skeleton className="h-[calc(100vh-8rem)] w-full rounded-lg md:block hidden" />
       </div>
     );
   }
@@ -88,7 +92,7 @@ export default function DoctorDashboardPage() {
       {loadingData ? (
          <div className="grid md:grid-cols-[minmax(280px,_1fr)_3fr] gap-6 h-full">
           <Skeleton className="h-[calc(100vh-12rem)] w-full rounded-lg" />
-          <Skeleton className="h-[calc(100vh-12rem)] w-full rounded-lg" />
+          <Skeleton className="h-[calc(100vh-12rem)] w-full rounded-lg md:block hidden" />
         </div>
       ) : patients.length === 0 ? (
         <Card className="shadow-lg mt-8">
@@ -111,19 +115,39 @@ export default function DoctorDashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(280px,_1fr)_3fr] gap-6 items-start">
-          {/* Updated this div to be sticky only on md screens and above */}
-          <div className="md:sticky md:top-20 md:self-start">
-            <PatientList 
-              patients={patients} 
-              onSelectPatient={setSelectedPatient}
-              selectedPatientId={selectedPatient?.id}
-            />
+        <>
+          {/* Desktop View: Two columns. Only shown on md screens and up. */}
+          <div className="hidden md:grid md:grid-cols-[minmax(280px,_1fr)_3fr] md:gap-6 md:items-start">
+            <div className="md:sticky md:top-20 md:self-start">
+              <PatientList 
+                patients={patients} 
+                onSelectPatient={setSelectedPatient}
+                selectedPatientId={selectedPatient?.id}
+              />
+            </div>
+            <div className="min-w-0">
+              {/* For desktop, PatientDataView is always rendered; it handles its empty state internally */}
+              <PatientDataView patient={selectedPatient} isMobileView={false} />
+            </div>
           </div>
-          <div className="min-w-0"> {/* Added min-w-0 to prevent overflow issues in flex/grid children */}
-            <PatientDataView patient={selectedPatient} />
+
+          {/* Mobile View: Single column, conditional rendering. Only shown on screens smaller than md. */}
+          <div className="md:hidden">
+            {!selectedPatient ? (
+              <PatientList 
+                patients={patients} 
+                onSelectPatient={setSelectedPatient}
+                selectedPatientId={selectedPatient?.id}
+              />
+            ) : (
+              <PatientDataView 
+                patient={selectedPatient} 
+                onBack={handleBackToList} 
+                isMobileView={true} 
+              />
+            )}
           </div>
-        </div>
+        </>
       )}
     </div>
   );
